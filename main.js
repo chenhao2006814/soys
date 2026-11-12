@@ -119,14 +119,14 @@ pwdEye.onclick = ()=>{
     adminPwd.type = adminPwd.type === 'password' ? 'text' : 'password';
     pwdEye.textContent = adminPwd.type==='password'?'':'';
 }
-//  Failed to fetch
+// 
 async function loadSourceData() {
   let retry = 0;
   const maxRetry = 2;
   while (retry <= maxRetry) {
     try {
       const { data, error } = await supabase
-        .from('"movie-search-source"')
+        .from('movie-search-source')
         .select('*')
         .order('sort', { ascending: true });
       if (error) throw error;
@@ -148,12 +148,12 @@ async function saveSortAfterChange(){
     logText("");
     for(let i=0;i<sourceList.length;i++){
         const item = sourceList[i];
-        const {error} = await supabase.from('"movie-search-source"').update({sort:i}).eq("id", item.id);
+        const {error} = await supabase.from('movie-search-source').update({sort:i}).eq("id", item.id);
         if(error) logText(""+error.message);
     }
     showToast("");
 }
-//  visitor_id / add_date / add_num
+// 
 async function loadVisitorCount(vid) {
   const today = new Date().toISOString().slice(0, 10);
   logText(`visitor_id=${vid}add_date=${today}`);
@@ -209,7 +209,7 @@ async function addSourceApi(payload){
         let num = countRow?.add_num || 0;
         if(num >=5) return {code:-1, msg:"5"};
     }
-    const {error} = await supabase.from('"movie-search-source"').insert({
+    const {error} = await supabase.from('movie-search-source').insert({
         name:payload.name,
         url:payload.home,
         search:payload.search,
@@ -240,8 +240,8 @@ async function addSourceApi(payload){
     return {code:0};
 }
 async function editSourceApi(dbId,payload){
-    const {data:old} = await supabase.from('"movie-search-source"').select("from_visitor").eq("id",dbId).single();
-    const {error} = await supabase.from('"movie-search-source"').update({
+    const {data:old} = await supabase.from('movie-search-source').select("from_visitor").eq("id",dbId).single();
+    const {error} = await supabase.from('movie-search-source').update({
         name:payload.name,
         url:payload.home,
         search:payload.search,
@@ -255,7 +255,7 @@ async function editSourceApi(dbId,payload){
     return {code:0};
 }
 async function delSourceApi(dbId){
-    const {error} = await supabase.from('"movie-search-source"').delete().eq("id",dbId);
+    const {error} = await supabase.from('movie-search-source').delete().eq("id",dbId);
     if(error){
         logText(`${error.message}`);
         return {code:-1,msg:error.message};
@@ -407,9 +407,7 @@ $('#confirmAdd').onclick = async ()=>{
     const search = $('#addSearch').value.trim();
     const typeVal = addSourceType.value;
     
-    // ==================
     logText(`name="${name}" home="${home}" search="${search}" type="${typeVal}"`);
-    // =============================
     
     if(!name || !home || !search) return showToast('');
     if(!(home.startsWith('http://') || home.startsWith('https://'))) return showToast('');
