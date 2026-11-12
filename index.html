@@ -1,0 +1,839 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>多源聚合搜索</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;font-family:"Noto Sans SC Rounded","MiSans Rounded","PingFang SC","Hiragino Sans GB","Microsoft YaHei",system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;}
+body{background-color:#f3efe6;color:#222;line-height:1.6;padding:16px;max-width:720px;margin:0 auto;}
+body.drag-lock{
+    touch-action: pan-y;
+}
+header{text-align:center;margin-bottom:24px;position:relative;}
+#hamburgerBtn{
+    width:36px;
+    height:36px;
+    display:flex;
+    flex-direction:column;
+    justify-content:center;
+    align-items:center;
+    gap:4px;
+    cursor:pointer;
+    border-radius:8px;
+    z-index:10;
+}
+#hamburgerBtn span{
+    width:18px;
+    height:2px;
+    background:#333;
+    border-radius:1px;
+    pointer-events:none;
+}
+.category-dropdown{
+    position:absolute;
+    right: 0;
+    top: 100%;
+    margin-top:4px;
+    background:#fff;
+    border:1px solid #f0b888;
+    border-radius:12px;
+    z-index:30;
+    width:90px;
+    display:none;
+    overflow:hidden;
+}
+.category-dropdown.open{
+    display:block;
+}
+.category-item{
+    padding:8px 10px;
+    cursor:pointer;
+    font-size:13px;
+    text-align:center;
+}
+.category-item.active{
+    background:#f9e9d8;
+    color:#e67e22;
+}
+.category-item:hover{
+    background:#f7efe3;
+}
+.type-select-popup {
+    z-index: 999 !important;
+    pointer-events: auto !important;
+}
+h1{font-size:24px;font-weight:600;margin-bottom:6px;color:#1d2129;}
+.tip-text{color:#666;font-size:13px;}
+.search-wrap{
+    position:relative;
+    margin-bottom:20px;
+    display:flex;
+    gap:8px;
+    align-items:center;
+}
+#kw{
+    flex:1;
+    padding:12px 40px 12px 14px;
+    border:1px solid #f0b888;
+    border-radius:16px;
+    font-size:15px;
+    outline:none;
+    transition:0.24s;
+    background:#fff;
+}
+#kw:active{background:#f9e9d8;}
+#kw:focus{border-color:#e67e22;box-shadow:0 2px 10px rgba(0,0,0,0.05);}
+.clear-kw{
+    position:absolute;
+    right: 78px;
+    top:50%;
+    transform: translateY(-50%);
+    font-size:18px;
+    color:#999;
+    cursor:pointer;
+    display:none;
+    user-select:none;
+}
+.clear-kw.show{
+    display:block;
+}
+#searchBtn{padding:12px 16px;border-radius:16px;border:none;background:#e67e22;color:#fff;font-size:14px;cursor:pointer;transition:0.24s;}
+#searchBtn:active{opacity:0.9;}
+.top-bar{display:flex;justify-content:space-between;align-items:center;margin-bottom:18px;gap:10px;flex-wrap:wrap;}
+.btn{padding:10px 14px;border-radius:16px;border:1px solid #f0b888;background:#fff;color:#222;font-size:14px;cursor:pointer;transition:0.24s;user-select:none;}
+.btn:active{background:#f9e9d8;}
+.btn:hover{border-color:#e67e22;box-shadow:0 2px 8px rgba(0,0,0,0.04);}
+.source-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;position:relative;}
+.source-card{background:#f3efe6;border:1px solid #f0b888;border-radius:16px;padding:14px;text-align:center;position:relative;transition:0.24s;cursor:pointer;user-select: none;
+-webkit-user-select: none;
+}
+.source-card:active{transform: translateY(-2px);box-shadow: 0 4px 10px #d9cdbc77;}
+.source-card:hover{box-shadow:0 3px 12px rgba(0,0,0,0.05);transform:translateY(-1px);}
+.source-card.dragging{opacity:0.4;}
+.visitor-tag{
+    position:absolute;
+    right:6px;
+    bottom:4px;
+    font-size:10px;
+    color:#999;
+    pointer-events:none;
+}
+.source-card .card-name{font-size:14px;color:#1d2129;}
+.drag-ghost{
+    position:fixed;
+    pointer-events:none;
+    z-index:9999;
+    background:#f3efe6;
+    border:1px solid #e67e22;
+    border-radius:16px;
+    padding:14px;
+    opacity:0.8;
+    transform:translate(-50%,-50%);
+}
+.card-ops{
+    position:absolute;
+    top:4px;
+    left:4px;
+    right:4px;
+    display:none;
+    gap:4px;
+    z-index:20;
+    pointer-events:auto;
+    justify-content:space-between;
+}
+.card-ops.show{
+    display:flex;
+}
+.opt-btn{
+    font-size:11px;
+    padding:2px 5px;
+    border-radius:4px;
+    border:none;
+    color:#fff;
+    cursor:pointer;
+}
+.edit{background:#4080ff;}
+.del{background:#f53f3f;}
+.mask{position:fixed;inset:0;background:rgba(0,0,0,0.35);display:none;align-items:center;justify-content:center;z-index:99;}
+.mask.open{display:flex;}
+.modal{width:90%;max-width:420px;background:#fff;border-radius:18px;padding:20px;border:1px solid #e5e6eb;box-shadow:0 6px 24px rgba(0,0,0,0.07);}
+.modal h3{font-size:17px;margin-bottom:14px;color:#1d2129;}
+.modal .limit-tip{font-size:13px;color:#666;margin-bottom:12px;}
+.modal input{width:100%;padding:11px 13px;border:1px solid #e5e6eb;;border-radius:16px;margin-bottom:12px;font-size:14px;outline:none;transition:0.2s;}
+.modal input:focus{border-color:#e67e22;}
+.modal select{padding:11px 8px;border:1px solid #e5e6eb;;border-radius:16px;margin-bottom:12px;font-size:14px;outline:none;transition:0.2s;}
+.modal select:focus{border-color:#e67e22;}
+.modal .input-row{display:flex;gap:8px;}
+.modal .input-row input{flex:1;margin-bottom:12px;}
+.modal .input-row select{width:110px;margin-bottom:12px;}
+.modal .btn-group{display:flex;gap:8px;justify-content:flex-end;margin-top:8px;}
+.pwd-wrap {
+  display: flex;
+  align-items: center;
+  position: relative;
+}
+.pwd-wrap input{
+    padding-right:44px;
+    margin-bottom:12px;
+}
+.pwd-eye {
+  position: absolute;
+  right: 12px;
+  top: 14px;
+  font-size: 18px;
+  line-height:1;
+}
+.toast{position:fixed;bottom:60px;left:50%;transform:translateX(-50%);background:#222;color:#fff;padding:9px 18px;border-radius:9px;font-size:14px;display:none;z-index:100;white-space:nowrap;}
+.toast.show{display:block;}
+footer{margin-top:36px;padding-top:16px;border-top:1px solid #e5e6eb;text-align:center;color:#666;font-size:13px;}
+#debugBox{margin-top:20px;background:#111;color:#0f0;padding:10px;font-size:11px;white-space:pre-wrap;max-height:220px;overflow-y:auto;}
+.modal .btn:disabled {
+    background: #eeeeee !important;
+    color: #aaaaaa !important;
+    border-color: #dddddd !important;
+    cursor: not-allowed !important;
+    opacity: 0.7;
+}
+</style>
+</head>
+<body>
+<header>
+    <div style="position:absolute; right:0; top:0; z-index:10;">
+        <div id="hamburgerBtn">
+            <span></span>
+            <span></span>
+            <span></span>
+        </div>
+        <div class="category-dropdown" id="catDrop">
+            <div class="category-item" data-type="video">影视源</div>
+            <div class="category-item" data-type="pan">网盘源</div>
+            <div class="category-item" data-type="magnet">磁力源</div>
+        </div>
+    </div>
+    <h1>多源聚合搜索</h1>
+    <div class="tip-text">聚合搜索源 · 一键检索</div>
+</header>
+<div class="search-wrap">
+    <input id="kw" placeholder="输入关键词搜索">
+    <span class="clear-kw" id="clearKw">×</span>
+    <button id="searchBtn">搜索</button>
+</div>
+<div class="top-bar">
+    <button class="btn" id="sourceManageBtn">源添加</button>
+    <button class="btn" id="adminLoginBtn">游客</button>
+</div>
+<div class="source-grid" id="sourceGrid"></div>
+<div class="mask" id="addMask">
+    <div class="modal">
+        <h3>添加搜索源</h3>
+        <div class="limit-tip" id="addLimitTip">今日剩余添加：5次</div>
+        <div class="input-row">
+            <input type="text" id="addName" placeholder="源名称（不可重复）">
+            <select id="addSourceType">
+                <option value="video">影视源</option>
+                <option value="pan">网盘源</option>
+                <option value="magnet">磁力源</option>
+            </select>
+        </div>
+        <input type="text" id="addHome" placeholder="首页地址（http/https开头）">
+        <input type="text" id="addSearch" placeholder="搜索页地址，关键词使用{kw}替换">
+        <div class="btn-group">
+            <button class="btn" id="cancelAdd">取消</button>
+            <button class="btn" id="confirmAdd">确认添加</button>
+        </div>
+    </div>
+</div>
+<div class="mask" id="loginMask">
+    <div class="modal">
+        <h3>登录</h3>
+        <div class="pwd-wrap">
+            <input type="password" id="adminPwd" placeholder="输入管理员密码">
+            <span class="pwd-eye" id="pwdEye">👁</span>
+        </div>
+        <div class="btn-group">
+            <button class="btn" id="cancelLogin">取消</button>
+            <button class="btn" id="confirmLogin">登录</button>
+        </div>
+    </div>
+</div>
+<div class="mask" id="editMask">
+    <div class="modal">
+        <h3>编辑搜索源</h3>
+        <div class="input-row">
+            <input type="text" id="editName" placeholder="源名称">
+            <select id="editSourceType">
+                <option value="video">影视源</option>
+                <option value="pan">网盘源</option>
+                <option value="magnet">磁力源</option>
+            </select>
+        </div>
+        <input type="text" id="editHome" placeholder="首页地址">
+        <input type="text" id="editSearch" placeholder="搜索页地址">
+        <input type="hidden" id="editDbId">
+        <div class="btn-group">
+            <button class="btn" id="cancelEdit">取消</button>
+            <button class="btn" id="confirmEdit">保存</button>
+        </div>
+    </div>
+</div>
+<div class="toast" id="toast"></div>
+<footer>
+    <span id="visitorTxt">今日访客：0人</span>
+    &nbsp;|&nbsp;
+    <span id="addTotalTxt">游客今日新增源：0</span>
+    &nbsp;|&nbsp;
+    <span id="loadTxt">页面加载：0.00s</span>
+</footer>
+<div id="debugBox">【调试日志启动】\n</div>
+<script>
+// ========= Supabase 配置 =========
+const supabaseUrl = "https://lzaidqtldgxhauwssslz.supabase.co";
+const supabaseAnonKey = "sb_publishable_323LjUfcN75yOBZzS7mJVg_ejjFic3t";
+const supabase = window.supabase.createClient(supabaseUrl, supabaseAnonKey);
+
+
+// Cookie工具 + 生成访客ID
+function setCookie(name,value,day){
+    let d = new Date();
+    d.setTime(d.getTime() + day*24*60*60*1000);
+    document.cookie = name+"="+value+";expires="+d.toUTCString()+";path=/";
+}
+function getCookie(name){
+    let arr = document.cookie.match(new RegExp("(^| )"+name+"=([^;]*)(;|$)"));
+    if(arr != null) return arr[2];
+    return null;
+}
+let vid = getCookie('vid');
+if (!vid) {
+    vid = 'v_' + Date.now() + '_' + Math.random().toString(36).slice(2);
+    setCookie('vid', vid, 1);
+}
+function getVisitorId() {
+    let vid = getCookie('visitorId');
+    if (!vid) {
+        vid = 'v_' + Date.now() + '_' + Math.random().toString(36).slice(2);
+        setCookie('visitorId', vid, 1);
+    }
+    return vid;
+}
+const visitorId = getVisitorId();
+const todayStr = new Date().toISOString().slice(0,10);
+
+const $ = s => document.querySelector(s);
+const $$ = s => document.querySelectorAll(s);
+const pageStart = performance.now();
+let sourceList = [];
+let isAdmin = false;
+let remainCount = 5;
+let currentCat = "video";
+let dragState = {
+    active: false,
+    fromIdx: null,
+    ghostEl: null,
+    startX:0, startY:0
+};
+const kwInput = $('#kw');
+const clearKw = $('#clearKw');
+const sourceGrid = $('#sourceGrid');
+const sourceManageBtn = $('#sourceManageBtn');
+const adminLoginBtn = $('#adminLoginBtn');
+const addMask = $('#addMask');
+const loginMask = $('#loginMask');
+const editMask = $('#editMask');
+const toast = $('#toast');
+const addLimitTip = $('#addLimitTip');
+const visitorTxt = $('#visitorTxt');
+const addTotalTxt = $('#addTotalTxt');
+const loadTxt = $('#loadTxt');
+const debugBox = $('#debugBox');
+const bodyEl = document.body;
+const hamburgerBtn = $('#hamburgerBtn');
+const catDropdown = $('#catDrop');
+
+//汉堡下拉菜单
+hamburgerBtn.addEventListener('click', (e) => {
+  e.stopPropagation();
+  catDropdown.classList.toggle('open');
+});
+document.addEventListener('click', (e) => {
+  if (!catDropdown.contains(e.target)) {
+    catDropdown.classList.remove('open');
+  }
+});
+$$('.category-item').forEach(item => {
+  item.addEventListener('click', (e) => {
+    e.stopPropagation();
+    currentCat = item.dataset.type;
+    refreshCatActive();
+    renderList();
+    catDropdown.classList.remove('open');
+  });
+});
+
+//搜索框清除叉号逻辑
+kwInput.addEventListener('input', ()=>{
+  if(kwInput.value.trim() !== ''){
+    clearKw.classList.add('show');
+  }else{
+    clearKw.classList.remove('show');
+  }
+})
+clearKw.onclick = ()=>{
+  kwInput.value = '';
+  clearKw.classList.remove('show');
+  kwInput.focus();
+};
+
+const addSourceType = $('#addSourceType');
+const editSourceType = $('#editSourceType');
+const adminPwd = $('#adminPwd');
+const pwdEye = $('#pwdEye');
+pwdEye.onclick = ()=>{
+    if(adminPwd.type === 'password'){
+        adminPwd.type = 'text';
+        pwdEye.textContent = '🙈';
+    }else{
+        adminPwd.type = 'password';
+        pwdEye.textContent = '👁';
+    }
+}
+
+function logText(msg){
+    const t = new Date().toLocaleTimeString();
+    debugBox.innerText += `[${t}] ${msg}\n`;
+    debugBox.scrollTop = debugBox.scrollHeight;
+}
+function showToast(txt) {
+    toast.textContent = txt;
+    toast.classList.add('show');
+    setTimeout(()=>toast.classList.remove('show'),1800);
+}
+function getDomain(url) {
+    try {
+        const u = new URL(url);
+        return u.hostname.replace('www.','');
+    }catch(e){
+        return '';
+    }
+}
+function doCardJump(item){
+    const kw = kwInput.value.trim();
+    if(kw){
+        const link = item.search.replaceAll('{kw}',encodeURIComponent(kw));
+        window.open(link,'_blank');
+    }else{
+        window.open(item.home,'_blank');
+    }
+}
+function refreshCatActive(){
+    $$('.category-item').forEach(el=>{
+        el.classList.toggle('active', el.dataset.type === currentCat);
+    })
+}
+
+// ========= Supabase 接口替换函数 =========
+//读取源列表
+async function loadSourceData() {
+    log("开始读取源列表");
+    const { data, error } = await supabase
+        .from('vod_source')
+        .select('*')
+        .order('sort', { ascending: true });
+    if(error){
+        log("读取源失败："+error.message);
+        return;
+    }
+    sourceList = data;
+    renderList();
+    log("加载完成，共"+sourceList.length+"条源");
+}
+
+
+//保存拖拽排序
+//保存拖拽排序
+async function saveSortAfterChange(){
+    logText("【拖拽保存到Supabase】");
+    for(let i=0;i<sourceList.length;i++){
+        const item = sourceList[i];
+        const {error} = await supabase
+            .from("vod_source")
+            .update({sort:i})
+            .eq("id", item.id);
+        if(error){
+            log("排序保存失败："+error.message);
+        }
+    }
+    showToast("排序已保存");
+}
+
+//访客统计与次数查询
+async function loadVisitor(){
+    logText("【查询访客计数】vid="+visitorId);
+    //查询本人今日计数
+    const {data:myRow} = await supabase.from("visitor_count").select("add_num").eq("visitor_id",visitorId).eq("add_date",todayStr).single();
+    remainCount = myRow ? 5 - myRow.add_num :5;
+
+    //统计今日全部新增
+    const {data:todayAll} = await supabase.from("visitor_count").select("*").eq("add_date",todayStr);
+    let totalAdd = 0;
+    if(todayAll){
+        totalAdd = todayAll.reduce((s,r)=>s+r.add_num,0);
+    }
+    visitorTxt.textContent = `今日访客：${todayAll?.length||0}人`;
+    addTotalTxt.textContent = `游客今日新增源：${totalAdd}`;
+    return {remain:remainCount};
+}
+
+//新增源
+async function addSourceApi(payload){
+    logText("【新增源】"+JSON.stringify(payload));
+    const today = new Date().toISOString().slice(0,10);
+    //游客先校验次数
+    if(!payload.isAdmin){
+        const {data:countRow, error:countErr} = await supabase
+            .from("visitor_count")
+            .select("count")
+            .eq("vid", payload.vid)
+            .eq("date", today)
+            .single();
+        if(countErr && countErr.code !== 'PGRST116'){
+            return {code:-1, msg:"查询次数失败"};
+        }
+        let num = countRow?.count || 0;
+        if(num >=5){
+            return {code:-1, msg:"今日添加已达上限5条"};
+        }
+    }
+
+    const {error} = await supabase.from("vod_source").insert({
+        name:payload.name,
+        url:payload.home,
+        search:payload.search,
+        category:payload.type,
+        from_visitor:!payload.isAdmin,
+        sort: sourceList.length
+    });
+
+    if(!payload.isAdmin && !error){
+        const {data:row} = await supabase.from("visitor_count")
+            .select("count")
+            .eq("vid", payload.vid)
+            .eq("date", today)
+            .single();
+        if(row){
+            await supabase.from("visitor_count")
+                .update({count: row.count + 1})
+                .eq("vid", payload.vid)
+                .eq("date", today);
+        }else{
+            await supabase.from("visitor_count")
+                .insert({vid:payload.vid, date:today, count:1});
+        }
+    }
+
+    if(error) return {code:-1, msg:error.message};
+    return {code:0};
+}
+
+
+//编辑源
+async function editSourceApi(dbId,payload){
+    logText("【编辑源dbId="+dbId+"】"+JSON.stringify(payload));
+    //读取旧数据保留from_visitor标记
+    const {data:old} = await supabase.from("vod_source").select("from_visitor").eq("id",dbId).single();
+    const {error} = await supabase.from("vod_source").update({
+        name:payload.name,
+        url:payload.home,
+        search:payload.search,
+        category:payload.type,
+        from_visitor:old.from_visitor
+    }).eq("id",dbId);
+    if(error) return {code:-1,msg:error.message};
+    return {code:0};
+}
+
+//删除源
+async function delSourceApi(dbId){
+    logText("【删除源dbId="+dbId+"】");
+    const {error} = await supabase.from("vod_source").delete().eq("id",dbId);
+    if(error) return {code:-1,msg:error.message};
+    return {code:0};
+}
+
+//校验管理员密码（从数据库读取）
+async function checkAdminPwd(inputPwd){
+    const {data} = await supabase.from("admin_config").select("config_value").eq("config_key","admin_pwd").single();
+    return data?.config_value === inputPwd;
+}
+
+//渲染页面
+function renderList(){
+    logText("执行renderList渲染卡片");
+    sourceGrid.innerHTML = '';
+    const filtered = sourceList.filter(item => (item.type || "video") === currentCat);
+    filtered.forEach((item)=>{
+        const realIdx = sourceList.indexOf(item);
+        const card = document.createElement('div');
+        card.className = 'source-card';
+        card.dataset.idx = realIdx;
+        card.dataset.dbid = item.dbId;
+        card.innerHTML = `
+            <div class="card-name">${item.name}</div>
+${item.from_visitor ? '<span class="visitor-tag">(游)</span>' : ''}
+            <div class="card-ops">
+            <button class="opt-btn edit" data-idx="${realIdx}" data-dbid="${item.dbId}">编辑</button>
+            <button class="opt-btn del" data-idx="${realIdx}" data-dbid="${item.dbId}">删除</button>
+            </div>
+       `;
+        const editBtn = card.querySelector('.edit');
+        const delBtn = card.querySelector('.del');
+        const opsWrap = card.querySelector('.card-ops');
+        let longPressTimer = null;
+        let touchStartX = 0, touchStartY = 0;
+        card.addEventListener('touchstart',(e)=>{
+            if(!isAdmin) return;
+            const touch = e.touches[0];
+            touchStartX = touch.clientX;
+            touchStartY = touch.clientY;
+            longPressTimer = setTimeout(()=>{
+                e.preventDefault();
+                dragState.active = true;
+                dragState.fromIdx = realIdx;
+                dragState.startX = touch.clientX;
+                dragState.startY = touch.clientY;
+                const ghost = document.createElement('div');
+                ghost.className = "drag-ghost";
+                ghost.innerText = item.name;
+                document.body.appendChild(ghost);
+                dragState.ghostEl = ghost;
+                ghost.style.left = touch.clientX + 'px';
+                ghost.style.top = touch.clientY + 'px';
+                card.classList.add('dragging');
+                bodyEl.classList.add('drag-lock');
+                showToast("已激活拖拽，拖动换位");
+                logText(`卡片[${realIdx}]长按，激活触摸拖拽`);
+            },600);
+        })
+        card.addEventListener('contextmenu', e=>{
+            if(isAdmin) e.preventDefault();
+         })
+        card.addEventListener('touchmove',(e)=>{
+            if(!isAdmin) return;
+            const touch = e.touches[0];
+            const dx = touch.clientX - touchStartX;
+            const dy = touch.clientY - touchStartY;
+            if(Math.abs(dx) > 10 || Math.abs(dy) >10){
+                clearTimeout(longPressTimer);
+            }
+            if(!dragState.active) return;
+            e.preventDefault();
+            dragState.ghostEl.style.left = touch.clientX + 'px';
+            dragState.ghostEl.style.top = touch.clientY + 'px';
+            const cards = $$('.source-card');
+            for(let c of cards){
+                const rect = c.getBoundingClientRect();
+                if(touch.clientX >= rect.left && touch.clientX <= rect.right && touch.clientY >= rect.top && touch.clientY <= rect.bottom){
+                    const targetIdx = Number(c.dataset.idx);
+                    if(targetIdx !== dragState.fromIdx){
+                        const temp = sourceList[dragState.fromIdx];
+                        sourceList.splice(dragState.fromIdx,1);
+                        sourceList.splice(targetIdx,0,temp);
+                        dragState.fromIdx = targetIdx;
+                        renderList();
+                        logText(`换位：${dragState.fromIdx} ↔ ${targetIdx}`);
+                    }
+                    break;
+                }
+            }
+        })
+        card.addEventListener('touchend',()=>{
+            clearTimeout(longPressTimer);
+            if(!dragState.active) return;
+            dragState.active = false;
+            if(dragState.ghostEl){
+                dragState.ghostEl.remove();
+                dragState.ghostEl = null;
+            }
+            card.classList.remove('dragging');
+            bodyEl.classList.remove('drag-lock');
+            logText(`卡片[${realIdx}]拖拽结束，提交保存`);
+            saveSortAfterChange();
+        })
+        card.addEventListener('click',(e)=>{
+            logText(`卡片[${realIdx}]被单击,isAdmin=${isAdmin}`);
+            e.stopPropagation();
+            if (isAdmin) {
+                $$('.card-ops').forEach(o=>o.classList.remove('show'));
+                opsWrap.classList.add('show');
+                logText(`卡片[${realIdx}]展示编辑删除按钮`);
+            }else{
+                doCardJump(item);
+            }
+        })
+        card.addEventListener('dblclick',()=>{
+            logText(`卡片[${realIdx}]双击，执行跳转`);
+            doCardJump(item);
+        })
+        editBtn.addEventListener('click',(e)=>{
+            logText(`点击编辑按钮 idx=${editBtn.dataset.idx} dbid=${editBtn.dataset.dbid}`);
+            e.stopPropagation();
+            const i = Number(editBtn.dataset.idx);
+            const data = sourceList[i];
+            $('#editDbId').value = data.dbId;
+            $('#editName').value = data.name;
+            $('#editHome').value = data.home;
+            $('#editSearch').value = data.search;
+            editSourceType.value = data.type || "video";
+            editMask.classList.add('open');
+        })
+        delBtn.addEventListener('click',async (e)=>{
+            logText(`点击删除按钮 dbid=${delBtn.dataset.dbid}`);
+            e.stopPropagation();
+            const dbId = Number(delBtn.dataset.dbid);
+            if(!confirm("确定要删除该搜索源吗？")) return;
+            logText("【删除提交】 dbId="+ dbId);
+            const ret = await delSourceApi(dbId);
+            logText("【删除返回】 "+ JSON.stringify(ret));
+            if(ret.code===0){
+                showToast('已删除');
+                await loadSourceData();
+                await loadVisitor();
+            }else{
+                showToast(ret.msg);
+            }
+        })
+        sourceGrid.appendChild(card);
+    })
+}
+
+sourceManageBtn.onclick = async ()=>{
+    logText("【点击源添加，直接打开弹窗，后台请求次数】");
+    addLimitTip.textContent = "正在获取剩余次数...";
+    $('#addName').value = "";
+    $('#addHome').value = "";
+    $('#addSearch').value = "";
+    addSourceType.value = currentCat;
+    addMask.classList.add('open');
+    $('#confirmAdd').disabled = false;
+    const stat = await loadVisitor();
+    logText("【源添加‑后台次数返回】" + JSON.stringify(stat));
+    if(!isAdmin && stat.remain <= 0){
+        addLimitTip.textContent = "今日剩余添加：0次";
+        $('#confirmAdd').disabled = true;
+        showToast("今日添加次数已经用完！");
+        return;
+    }
+    addLimitTip.textContent = isAdmin ? "今日剩余添加：无限制" : `今日剩余添加：${stat.remain}次`;
+}
+$('#cancelAdd').onclick = ()=>addMask.classList.remove('open');
+$('#cancelLogin').onclick = ()=>loginMask.classList.remove('open');
+$('#cancelEdit').onclick = ()=>editMask.classList.remove('open');
+
+$('#confirmAdd').onclick = async ()=>{
+    const name = $('#addName').value.trim();
+    const home = $('#addHome').value.trim();
+    const search = $('#addSearch').value.trim();
+    const typeVal = addSourceType.value;
+    if(!name || !home || !search) return showToast('内容不能为空');
+    if(!(home.startsWith('http://') || home.startsWith('https://'))) return showToast('首页地址不是合法网址');
+    if(!(search.startsWith('http://') || search.startsWith('https://'))) return showToast('搜索页地址不是合法网址');
+    const nameExist = sourceList.some(x=>x.name === name);
+    if(nameExist) return showToast('源名称已存在');
+    const dHome = getDomain(home);
+    const dSearch = getDomain(search);
+    const domainRepeat = sourceList.some(x=>{
+        const dh = getDomain(x.home);
+        const ds = getDomain(x.search);
+        return dh === dHome || dh === dSearch || ds === dHome || ds === dSearch;
+    })
+    if(domainRepeat) return showToast('该域名已存在，不可重复添加');
+    const payload = {
+        name,
+        home,
+        search,
+        type:typeVal,
+        vid: vid,
+        isAdmin:isAdmin
+    };
+    logText("【添加源提交】"+ JSON.stringify(payload));
+    const ret = await addSourceApi(payload);
+    logText("【添加源返回】"+ JSON.stringify(ret));
+    if(ret.code !== 0){
+        return showToast(ret.msg);
+    }
+    addMask.classList.remove('open');
+    showToast('添加成功');
+    await loadSourceData();
+    await loadVisitor();
+}
+
+adminLoginBtn.onclick = async ()=>{
+    if(isAdmin){
+        isAdmin = false;
+        adminLoginBtn.textContent = '游客';
+        $$('.card-ops').forEach(op=>op.classList.remove('show'));
+        showToast('已退出登录');
+        logText("退出登录 isAdmin=false");
+        await loadSourceData();
+        await loadVisitor();
+    }else{
+        loginMask.classList.add('open');
+        adminPwd.value = "";
+        pwdEye.textContent = '👁';
+        adminPwd.type = 'password';
+    }
+}
+
+$('#confirmLogin').onclick = async ()=>{
+    const pwd = adminPwd.value.trim();
+    const ok = await checkAdminPwd(pwd);
+    if(ok){
+        isAdmin = true;
+        adminLoginBtn.textContent = '管理员';
+        loginMask.classList.remove('open');
+        renderList();
+        showToast('登录成功');
+        logText("管理员登录成功 isAdmin=true");
+        await loadSourceData();
+        await loadVisitor();
+    }else{
+        showToast('密码错误');
+        logText("管理员密码错误");
+    }
+}
+
+$('#confirmEdit').onclick = async ()=>{
+    const dbId = Number($('#editDbId').value);
+    const name = $('#editName').value.trim();
+    const home = $('#editHome').value.trim();
+    const search = $('#editSearch').value.trim();
+    const typeVal = editSourceType.value;
+    if(!name || !home || !search) return showToast('内容不能为空');
+    if(!(home.startsWith('http://') || home.startsWith('https://'))) return showToast('首页地址非法');
+    if(!(search.startsWith('http://') || search.startsWith('https://'))) return showToast('搜索页地址非法');
+    const payload = {name,home,search,type:typeVal};
+    logText("【编辑提交】dbId="+dbId+" "+ JSON.stringify(payload));
+    const ret = await editSourceApi(dbId,payload);
+    logText("【编辑返回】"+ JSON.stringify(ret));
+    if(ret.code===0){
+        editMask.classList.remove('open');
+        showToast('保存成功');
+        await loadSourceData();
+    }else{
+        showToast(ret.msg);
+    }
+}
+
+window.addEventListener('load', async ()=>{
+    logText("页面load事件触发");
+    const cost = ((performance.now() - pageStart)/1000).toFixed(2);
+    loadTxt.textContent = `页面加载：${cost}s`;
+    refreshCatActive();
+    await loadSourceData();
+    await loadVisitor();
+});
+</script>
+</body>
+</html>
