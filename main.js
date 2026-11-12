@@ -279,7 +279,8 @@ function renderList(){
         card.dataset.dbid = item.id;
         card.innerHTML = `
             <div class="card-name">${item.name}</div>
-${item.from_visitor ? '<span class="visitor-tag">()</span>' : ''}
+${item.from_visitor === true ? '<span class="visitor-tag">()</span>' : ''}
+
             <div class="card-ops">
             <button class="opt-btn edit" data-idx="${realIdx}" data-dbid="${item.id}"></button>
             <button class="opt-btn del" data-idx="${realIdx}" data-dbid="${item.id}"></button>
