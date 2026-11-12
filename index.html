@@ -399,7 +399,7 @@ function doCardJump(item){
         const link = item.search.replaceAll('{kw}',encodeURIComponent(kw));
         window.open(link,'_blank');
     }else{
-        window.open(item.home,'_blank');
+        window.open(item.url,'_blank');
     }
 }
 function refreshCatActive(){
@@ -521,7 +521,7 @@ ${item.from_visitor ? '<span class="visitor-tag">(游)</span>' : ''}
             const data = sourceList[i];
             $('#editId').value = data.id;
             $('#editName').value = data.name;
-            $('#editHome').value = data.home;
+            $('#editHome').value = data.url;
             $('#editSearch').value = data.search;
             editSourceType.value = data.category || "video";
             editMask.classList.add('open');
@@ -588,21 +588,21 @@ $('#cancelEdit').onclick = ()=>editMask.classList.remove('open');
 $('#confirmAdd').onclick = async ()=>{
     try{
         const name = $('#addName').value.trim();
-        const home = $('#addHome').value.trim();
+        const homeInputVal = $('#addHome').value.trim();
         const search = $('#addSearch').value.trim();
         const typeVal = addSourceType.value;
-        if(!name || !home || !search) return showToast('内容不能为空');
-        if(!(home.startsWith('http://') || home.startsWith('https://'))) return showToast('首页地址不是合法网址');
+        if(!name || !homeInputVal || !search) return showToast('内容不能为空');
+        if(!(homeInputVal.startsWith('http://') || homeInputVal.startsWith('https://'))) return showToast('首页地址不是合法网址');
         if(!(search.startsWith('http://') || search.startsWith('https://'))) return showToast('搜索页地址不是合法网址');
 
         const {data:existName} = await supabase.from('vod_source').select('id').eq('name',name);
         if(existName && existName.length>0) return showToast('源名称已存在');
 
-        const dHome = getDomain(home);
+        const dHome = getDomain(homeInputVal);
         const dSearch = getDomain(search);
-        const {data:allList} = await supabase.from('vod_source').select('home,search');
+        const {data:allList} = await supabase.from('vod_source').select('url,search');
         const domainRepeat = allList?.some(x=>{
-            const dh = getDomain(x.home);
+            const dh = getDomain(x.url);
             const ds = getDomain(x.search);
             return dh === dHome || dh === dSearch || ds === dHome || ds === dSearch;
         }) ?? false;
@@ -613,7 +613,7 @@ $('#confirmAdd').onclick = async ()=>{
 
         const insertRow = {
             name,
-            home,
+            url: homeInputVal,
             search,
             category:typeVal,
             sort:newSort,
@@ -682,13 +682,13 @@ if(cfg && cfg.length>0) realPwd = cfg[0].config_value;
 $('#confirmEdit').onclick = async ()=>{
     const rowId = $('#editId').value;
     const name = $('#editName').value.trim();
-    const home = $('#editHome').value.trim();
+    const homeInputVal = $('#editHome').value.trim();
     const search = $('#editSearch').value.trim();
     const typeVal = editSourceType.value;
-    if(!name || !home || !search) return showToast('内容不能为空');
-    if(!(home.startsWith('http://') || home.startsWith('https://'))) return showToast('首页地址非法');
+    if(!name || !homeInputVal || !search) return showToast('内容不能为空');
+    if(!(homeInputVal.startsWith('http://') || homeInputVal.startsWith('https://'))) return showToast('首页地址非法');
     if(!(search.startsWith('http://') || search.startsWith('https://'))) return showToast('搜索页地址非法');
-    const updatePayload = {name,home,search,category:typeVal};
+    const updatePayload = {name,url:homeInputVal,search,category:typeVal};
     const {error} = await supabase.from('vod_source').update(updatePayload).eq('id',rowId);
     if(error){
         logText("编辑失败 "+JSON.stringify(error));
