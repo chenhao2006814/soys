@@ -615,7 +615,7 @@ $('#confirmAdd').onclick = async ()=>{
     const dHome = getDomain(home);
     const dSearch = getDomain(search);
     const {data:allList} = await supabase.from('vod_source').select('home,search');
-    const domainRepeat = allList.some(x=>{
+    const domainRepeat = allList?.some(x=>{
         const dh = getDomain(x.home);
         const ds = getDomain(x.search);
         return dh === dHome || dh === dSearch || ds === dHome || ds === dSearch;
