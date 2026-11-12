@@ -671,9 +671,13 @@ adminLoginBtn.onclick = async ()=>{
 
 $('#confirmLogin').onclick = async ()=>{
     const pwd = adminPwd.value.trim();
-    const {data:cfg} = await supabase.from('admin_config').select("password").limit(1);
-    let realPwd = "";
-    if(cfg && cfg.length>0) realPwd = cfg[0].password;
+    const {data:cfg} = await supabase.from('admin_config')
+  .select("config_value")
+  .eq('config_key','admin_password')
+  .limit(1);
+let realPwd = "";
+if(cfg && cfg.length>0) realPwd = cfg[0].config_value;
+
     if(pwd === realPwd){
         isAdmin = true;
         adminLoginBtn.textContent = '管理员';
