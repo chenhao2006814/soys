@@ -282,7 +282,6 @@ footer{margin-top:36px;padding-top:16px;border-top:1px solid #e5e6eb;text-align:
 </footer>
 <div id="debugBox">【调试日志启动】\n</div>
 <script>
-// 已内置你的Supabase信息
 const supabaseUrl = "https://lzaidqtldgxhauwssslz.supabase.co";
 const supabaseAnonKey = "sb_publishable_323LjUfcN75yOBZzS7mJVg_ejjFic3t";
 let supabase = null;
@@ -439,16 +438,16 @@ async function saveSortAfterChange(){
     showToast("排序已保存");
 }
 
-// 访客统计逻辑【修复字段：add_time / source_count】
+// 访客统计逻辑【适配真实表字段 visitor_id / add_date / add_num】
 async function loadVisitorCount(vid) {
   const today = new Date().toISOString().slice(0, 10);
-  logText(`【查询访客计数】vid=${vid}，日期=${today}`);
+  logText(`【查询访客计数】visitor_id=${vid}，add_date=${today}`);
   try {
     const { data, error } = await supabase
       .from('visitor_count')
       .select('*')
-      .eq('vid', vid)
-      .eq('add_time', today)
+      .eq('visitor_id', vid)
+      .eq('add_date', today)
       .limit(1);
 
     if (error) {
@@ -458,13 +457,12 @@ async function loadVisitorCount(vid) {
     logText("访客查询返回结果：" + JSON.stringify(data));
 
     if (!data || data.length === 0) {
-      // 今日无记录，新增访客
       logText("未找到今日访客记录，准备新增访客");
       const insertRes = await supabase.from('visitor_count').insert([
         {
-          vid: vid,
-          add_time: today,
-          source_count: 0
+          visitor_id: vid,
+          add_date: today,
+          add_num: 0
         }
       ]);
       if (insertRes.error) {
@@ -476,9 +474,9 @@ async function loadVisitorCount(vid) {
       document.getElementById('addTotalTxt').innerText = `游客今日新增源：0`;
     } else {
       const row = data[0];
-      logText("✅ 找到今日访客记录，今日新增源：" + row.source_count);
+      logText("✅ 找到今日访客记录，今日新增源：" + row.add_num);
       document.getElementById('visitorTxt').innerText = `今日访客：1人`;
-      document.getElementById('addTotalTxt').innerText = `游客今日新增源：${row.source_count}`;
+      document.getElementById('addTotalTxt').innerText = `游客今日新增源：${row.add_num}`;
     }
   } catch (err) {
     logText("访客统计全局异常：" + err.message);
@@ -490,13 +488,13 @@ async function addSourceApi(payload){
     if(!payload.isAdmin){
         const {data:countRow, error:countErr} = await supabase
           .from("visitor_count")
-          .select("source_count")
-          .eq("vid", payload.vid)
-          .eq("add_time", today)
+          .select("add_num")
+          .eq("visitor_id", payload.vid)
+          .eq("add_date", today)
           .single();
 
         if(countErr && countErr.code !== 'PGRST116') return {code:-1, msg:"查询次数失败"};
-        let num = countRow?.source_count || 0;
+        let num = countRow?.add_num || 0;
         if(num >=5) return {code:-1, msg:"今日添加已达上限5条"};
     }
     const {error} = await supabase.from("vod_source").insert({
@@ -510,17 +508,17 @@ async function addSourceApi(payload){
 
     if(!payload.isAdmin && !error){
         const {data:row} = await supabase.from("visitor_count")
-          .select("source_count")
-          .eq("vid", payload.vid)
-          .eq("add_time", today)
+          .select("add_num")
+          .eq("visitor_id", payload.vid)
+          .eq("add_date", today)
           .single();
         if(row){
             await supabase.from("visitor_count")
-              .update({source_count: row.source_count + 1})
-              .eq("vid", payload.vid)
-              .eq("add_time", today);
+              .update({add_num: row.add_num + 1})
+              .eq("visitor_id", payload.vid)
+              .eq("add_date", today);
         }else{
-            await supabase.from("visitor_count").insert({vid:payload.vid, add_time:today, source_count:1});
+            await supabase.from("visitor_count").insert({visitor_id:payload.vid, add_date:today, add_num:1});
         }
     }
     if(error) return {code:-1, msg:error.message};
@@ -547,7 +545,6 @@ async function delSourceApi(dbId){
 }
 
 async function checkAdminPwd(inputPwd){
-    // admin_config 表：id,pwd,update_at
     const {data,error} = await supabase.from("admin_config").select("pwd").single();
     if(error) return false;
     return data?.pwd === inputPwd;
