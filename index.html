@@ -288,13 +288,12 @@ footer{margin-top:36px;padding-top:16px;border-top:1px solid #e5e6eb;text-align:
 </footer>
 <div id="debugBox">【调试日志启动】\n</div>
 <script>
-// ========= Supabase 配置 =========
+// ========= Supabase 配置（已填好你的信息） =========
 const supabaseUrl = "https://lzaidqtldgxhauwssslz.supabase.co";
 const supabaseAnonKey = "sb_publishable_323LjUfcN75yOBZzS7mJVg_ejjFic3t";
 const supabase = window.supabase.createClient(supabaseUrl, supabaseAnonKey);
 
-
-// Cookie工具 + 生成访客ID
+// Cookie工具，统一只使用 vid
 function setCookie(name,value,day){
     let d = new Date();
     d.setTime(d.getTime() + day*24*60*60*1000);
@@ -310,17 +309,7 @@ if (!vid) {
     vid = 'v_' + Date.now() + '_' + Math.random().toString(36).slice(2);
     setCookie('vid', vid, 1);
 }
-function getVisitorId() {
-    let vid = getCookie('visitorId');
-    if (!vid) {
-        vid = 'v_' + Date.now() + '_' + Math.random().toString(36).slice(2);
-        setCookie('visitorId', vid, 1);
-    }
-    return vid;
-}
-const visitorId = getVisitorId();
 const todayStr = new Date().toISOString().slice(0,10);
-
 const $ = s => document.querySelector(s);
 const $$ = s => document.querySelectorAll(s);
 const pageStart = performance.now();
@@ -385,7 +374,6 @@ clearKw.onclick = ()=>{
   clearKw.classList.remove('show');
   kwInput.focus();
 };
-
 const addSourceType = $('#addSourceType');
 const editSourceType = $('#editSourceType');
 const adminPwd = $('#adminPwd');
@@ -399,7 +387,6 @@ pwdEye.onclick = ()=>{
         pwdEye.textContent = '👁';
     }
 }
-
 function logText(msg){
     const t = new Date().toLocaleTimeString();
     debugBox.innerText += `[${t}] ${msg}\n`;
@@ -433,25 +420,23 @@ function refreshCatActive(){
     })
 }
 
-// ========= Supabase 接口替换函数 =========
+// ========= Supabase 接口函数 =========
 //读取源列表
 async function loadSourceData() {
-    log("开始读取源列表");
+    logText("开始读取源列表");
     const { data, error } = await supabase
         .from('vod_source')
         .select('*')
         .order('sort', { ascending: true });
     if(error){
-        log("读取源失败："+error.message);
+        logText("读取源失败："+error.message);
         return;
     }
     sourceList = data;
     renderList();
-    log("加载完成，共"+sourceList.length+"条源");
+    logText("加载完成，共"+sourceList.length+"条源");
 }
 
-
-//保存拖拽排序
 //保存拖拽排序
 async function saveSortAfterChange(){
     logText("【拖拽保存到Supabase】");
@@ -462,7 +447,7 @@ async function saveSortAfterChange(){
             .update({sort:i})
             .eq("id", item.id);
         if(error){
-            log("排序保存失败："+error.message);
+            logText("排序保存失败："+error.message);
         }
     }
     showToast("排序已保存");
@@ -470,12 +455,9 @@ async function saveSortAfterChange(){
 
 //访客统计与次数查询
 async function loadVisitor(){
-    logText("【查询访客计数】vid="+visitorId);
-    //查询本人今日计数
-    const {data:myRow} = await supabase.from("visitor_count").select("add_num").eq("visitor_id",visitorId).eq("add_date",todayStr).single();
+    logText("【查询访客计数】vid="+vid);
+    const {data:myRow} = await supabase.from("visitor_count").select("add_num").eq("visitor_id",vid).eq("add_date",todayStr).single();
     remainCount = myRow ? 5 - myRow.add_num :5;
-
-    //统计今日全部新增
     const {data:todayAll} = await supabase.from("visitor_count").select("*").eq("add_date",todayStr);
     let totalAdd = 0;
     if(todayAll){
@@ -490,7 +472,6 @@ async function loadVisitor(){
 async function addSourceApi(payload){
     logText("【新增源】"+JSON.stringify(payload));
     const today = new Date().toISOString().slice(0,10);
-    //游客先校验次数
     if(!payload.isAdmin){
         const {data:countRow, error:countErr} = await supabase
             .from("visitor_count")
@@ -506,7 +487,6 @@ async function addSourceApi(payload){
             return {code:-1, msg:"今日添加已达上限5条"};
         }
     }
-
     const {error} = await supabase.from("vod_source").insert({
         name:payload.name,
         url:payload.home,
@@ -515,7 +495,6 @@ async function addSourceApi(payload){
         from_visitor:!payload.isAdmin,
         sort: sourceList.length
     });
-
     if(!payload.isAdmin && !error){
         const {data:row} = await supabase.from("visitor_count")
             .select("count")
@@ -532,16 +511,13 @@ async function addSourceApi(payload){
                 .insert({vid:payload.vid, date:today, count:1});
         }
     }
-
     if(error) return {code:-1, msg:error.message};
     return {code:0};
 }
 
-
 //编辑源
 async function editSourceApi(dbId,payload){
     logText("【编辑源dbId="+dbId+"】"+JSON.stringify(payload));
-    //读取旧数据保留from_visitor标记
     const {data:old} = await supabase.from("vod_source").select("from_visitor").eq("id",dbId).single();
     const {error} = await supabase.from("vod_source").update({
         name:payload.name,
@@ -562,29 +538,29 @@ async function delSourceApi(dbId){
     return {code:0};
 }
 
-//校验管理员密码（从数据库读取）
+//校验管理员密码
 async function checkAdminPwd(inputPwd){
     const {data} = await supabase.from("admin_config").select("config_value").eq("config_key","admin_pwd").single();
     return data?.config_value === inputPwd;
 }
 
-//渲染页面
+//渲染页面，修复：使用 item.id，不再使用 item.dbId
 function renderList(){
     logText("执行renderList渲染卡片");
     sourceGrid.innerHTML = '';
-    const filtered = sourceList.filter(item => (item.type || "video") === currentCat);
+    const filtered = sourceList.filter(item => (item.category || "video") === currentCat);
     filtered.forEach((item)=>{
         const realIdx = sourceList.indexOf(item);
         const card = document.createElement('div');
         card.className = 'source-card';
         card.dataset.idx = realIdx;
-        card.dataset.dbid = item.dbId;
+        card.dataset.dbid = item.id;
         card.innerHTML = `
             <div class="card-name">${item.name}</div>
 ${item.from_visitor ? '<span class="visitor-tag">(游)</span>' : ''}
             <div class="card-ops">
-            <button class="opt-btn edit" data-idx="${realIdx}" data-dbid="${item.dbId}">编辑</button>
-            <button class="opt-btn del" data-idx="${realIdx}" data-dbid="${item.dbId}">删除</button>
+            <button class="opt-btn edit" data-idx="${realIdx}" data-dbid="${item.id}">编辑</button>
+            <button class="opt-btn del" data-idx="${realIdx}" data-dbid="${item.id}">删除</button>
             </div>
        `;
         const editBtn = card.querySelector('.edit');
@@ -681,11 +657,11 @@ ${item.from_visitor ? '<span class="visitor-tag">(游)</span>' : ''}
             e.stopPropagation();
             const i = Number(editBtn.dataset.idx);
             const data = sourceList[i];
-            $('#editDbId').value = data.dbId;
+            $('#editDbId').value = data.id;
             $('#editName').value = data.name;
-            $('#editHome').value = data.home;
+            $('#editHome').value = data.url;
             $('#editSearch').value = data.search;
-            editSourceType.value = data.type || "video";
+            editSourceType.value = data.category || "video";
             editMask.classList.add('open');
         })
         delBtn.addEventListener('click',async (e)=>{
@@ -707,7 +683,6 @@ ${item.from_visitor ? '<span class="visitor-tag">(游)</span>' : ''}
         sourceGrid.appendChild(card);
     })
 }
-
 sourceManageBtn.onclick = async ()=>{
     logText("【点击源添加，直接打开弹窗，后台请求次数】");
     addLimitTip.textContent = "正在获取剩余次数...";
@@ -730,7 +705,6 @@ sourceManageBtn.onclick = async ()=>{
 $('#cancelAdd').onclick = ()=>addMask.classList.remove('open');
 $('#cancelLogin').onclick = ()=>loginMask.classList.remove('open');
 $('#cancelEdit').onclick = ()=>editMask.classList.remove('open');
-
 $('#confirmAdd').onclick = async ()=>{
     const name = $('#addName').value.trim();
     const home = $('#addHome').value.trim();
@@ -744,7 +718,7 @@ $('#confirmAdd').onclick = async ()=>{
     const dHome = getDomain(home);
     const dSearch = getDomain(search);
     const domainRepeat = sourceList.some(x=>{
-        const dh = getDomain(x.home);
+        const dh = getDomain(x.url);
         const ds = getDomain(x.search);
         return dh === dHome || dh === dSearch || ds === dHome || ds === dSearch;
     })
@@ -768,7 +742,6 @@ $('#confirmAdd').onclick = async ()=>{
     await loadSourceData();
     await loadVisitor();
 }
-
 adminLoginBtn.onclick = async ()=>{
     if(isAdmin){
         isAdmin = false;
@@ -785,7 +758,6 @@ adminLoginBtn.onclick = async ()=>{
         adminPwd.type = 'password';
     }
 }
-
 $('#confirmLogin').onclick = async ()=>{
     const pwd = adminPwd.value.trim();
     const ok = await checkAdminPwd(pwd);
@@ -803,7 +775,6 @@ $('#confirmLogin').onclick = async ()=>{
         logText("管理员密码错误");
     }
 }
-
 $('#confirmEdit').onclick = async ()=>{
     const dbId = Number($('#editDbId').value);
     const name = $('#editName').value.trim();
@@ -825,7 +796,6 @@ $('#confirmEdit').onclick = async ()=>{
         showToast(ret.msg);
     }
 }
-
 window.addEventListener('load', async ()=>{
     logText("页面load事件触发");
     const cost = ((performance.now() - pageStart)/1000).toFixed(2);
