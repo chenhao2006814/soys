@@ -4,9 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>多源聚合搜索</title>
-
 <script src="./supabase.js"></script>
-
 <style>
 *{margin:0;padding:0;box-sizing:border-box;font-family:"Noto Sans SC Rounded","MiSans Rounded","PingFang SC","Hiragino Sans GB","Microsoft YaHei",system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;}
 body{background-color:#f3efe6;color:#222;line-height:1.6;padding:16px;max-width:720px;margin:0 auto;}
@@ -283,13 +281,11 @@ footer{margin-top:36px;padding-top:16px;border-top:1px solid #e5e6eb;text-align:
     <span id="loadTxt">页面加载：0.00s</span>
 </footer>
 <div id="debugBox">【调试日志启动】\n</div>
-
 <script>
 // 已内置你的Supabase信息
 const supabaseUrl = "https://lzaidqtldgxhauwssslz.supabase.co";
 const supabaseAnonKey = "sb_publishable_323LjUfcN75yOBZzS7mJVg_ejjFic3t";
 let supabase = null;
-
 const debugBox = document.getElementById('debugBox');
 function logText(msg){
     const t = new Date().toLocaleTimeString();
@@ -299,7 +295,6 @@ function logText(msg){
 window.onerror = function(message){
     logText("❌全局JS异常:"+message);
 };
-
 logText("等待Supabase SDK加载");
 try{
     if(typeof window.supabase !== "undefined"){
@@ -311,7 +306,6 @@ try{
 }catch(err){
     logText("❌初始化失败:"+err.message);
 }
-
 // Cookie工具
 function setCookie(name,value,day){
     let d = new Date();
@@ -337,7 +331,6 @@ let isAdmin = false;
 let remainCount = 5;
 let currentCat = "video";
 let dragState = {active: false,fromIdx: null,ghostEl: null,startX:0, startY:0};
-
 const kwInput = $('#kw');
 const clearKw = $('#clearKw');
 const sourceGrid = $('#sourceGrid');
@@ -358,7 +351,6 @@ const addSourceType = $('#addSourceType');
 const editSourceType = $('#editSourceType');
 const adminPwd = $('#adminPwd');
 const pwdEye = $('#pwdEye');
-
 function showToast(txt) {
     toast.textContent = txt;
     toast.classList.add('show');
@@ -384,7 +376,6 @@ function refreshCatActive(){
         el.classList.toggle('active', el.dataset.type === currentCat);
     })
 }
-
 hamburgerBtn.addEventListener('click', (e) => {
   e.stopPropagation();
   catDropdown.classList.toggle('open');
@@ -401,7 +392,6 @@ $$('.category-item').forEach(item => {
     catDropdown.classList.remove('open');
   });
 });
-
 kwInput.addEventListener('input', ()=>{
   clearKw.classList.toggle('show', kwInput.value.trim()!=='');
 })
@@ -410,24 +400,34 @@ clearKw.onclick = ()=>{
   clearKw.classList.remove('show');
   kwInput.focus();
 };
-
 pwdEye.onclick = ()=>{
     adminPwd.type = adminPwd.type === 'password' ? 'text' : 'password';
     pwdEye.textContent = adminPwd.type==='password'?'👁':'🙈';
 }
-
+// 加载源列表（带重试，解决间歇性 Failed to fetch）
 async function loadSourceData() {
-    if(!supabase){logText("❌supabase实例不存在，跳过查询");return;}
-    logText("开始读取源列表");
-    try{
-        const { data, error } = await supabase.from('vod_source').select('*').order('sort', { ascending: true });
-        if(error){ logText("读取源失败："+error.message); return; }
-        sourceList = data;
-        renderList();
-        logText("加载完成，共"+sourceList.length+"条源");
-    }catch(ex){
-        logText("异常:"+ex.message);
+  let retry = 0;
+  const maxRetry = 2;
+  while (retry <= maxRetry) {
+    try {
+      const { data, error } = await supabase
+        .from('vod_source')
+        .select('*')
+        .order('sort', { ascending: true });
+      if (error) throw error;
+      sourceList = data || [];
+      renderList(sourceList);
+      logText(`加载完成，共${data.length}条源`);
+      return;
+    } catch (e) {
+      retry++;
+      logText(`读取源失败，重试${retry}/${maxRetry}: ${e.message}`);
+      if (retry > maxRetry) {
+        logText("读取源失败: " + e);
+      }
+      await new Promise(resolve => setTimeout(resolve, 300));
     }
+  }
 }
 async function saveSortAfterChange(){
     logText("【拖拽保存】");
@@ -438,23 +438,65 @@ async function saveSortAfterChange(){
     }
     showToast("排序已保存");
 }
-async function loadVisitor(){
-    logText("【查询访客计数】vid="+vid);
-    const {data:myRow} = await supabase.from("visitor_count").select("add_num").eq("visitor_id",vid).eq("add_date",todayStr).single();
-    remainCount = myRow ? 5 - myRow.add_num :5;
-    const {data:todayAll} = await supabase.from("visitor_count").select("*").eq("add_date",todayStr);
-    let totalAdd = 0;
-    if(todayAll) totalAdd = todayAll.reduce((s,r)=>s+r.add_num,0);
-    visitorTxt.textContent = `今日访客：${todayAll?.length||0}人`;
-    addTotalTxt.textContent = `游客今日新增源：${totalAdd}`;
-    return {remain:remainCount};
+
+// 访客统计逻辑【修复字段：add_time / source_count】
+async function loadVisitorCount(vid) {
+  const today = new Date().toISOString().slice(0, 10);
+  logText(`【查询访客计数】vid=${vid}，日期=${today}`);
+  try {
+    const { data, error } = await supabase
+      .from('visitor_count')
+      .select('*')
+      .eq('vid', vid)
+      .eq('add_time', today)
+      .limit(1);
+
+    if (error) {
+      logText("访客查询报错：" + error.message);
+      return;
+    }
+    logText("访客查询返回结果：" + JSON.stringify(data));
+
+    if (!data || data.length === 0) {
+      // 今日无记录，新增访客
+      logText("未找到今日访客记录，准备新增访客");
+      const insertRes = await supabase.from('visitor_count').insert([
+        {
+          vid: vid,
+          add_time: today,
+          source_count: 0
+        }
+      ]);
+      if (insertRes.error) {
+        logText("新增访客记录失败：" + insertRes.error.message);
+      } else {
+        logText("✅ 新增访客记录成功");
+      }
+      document.getElementById('visitorTxt').innerText = `今日访客：1人`;
+      document.getElementById('addTotalTxt').innerText = `游客今日新增源：0`;
+    } else {
+      const row = data[0];
+      logText("✅ 找到今日访客记录，今日新增源：" + row.source_count);
+      document.getElementById('visitorTxt').innerText = `今日访客：1人`;
+      document.getElementById('addTotalTxt').innerText = `游客今日新增源：${row.source_count}`;
+    }
+  } catch (err) {
+    logText("访客统计全局异常：" + err.message);
+  }
 }
+
 async function addSourceApi(payload){
     const today = new Date().toISOString().slice(0,10);
     if(!payload.isAdmin){
-        const {data:countRow, error:countErr} = await supabase.from("visitor_count").select("count").eq("vid", payload.vid).eq("date", today).single();
+        const {data:countRow, error:countErr} = await supabase
+          .from("visitor_count")
+          .select("source_count")
+          .eq("vid", payload.vid)
+          .eq("add_time", today)
+          .single();
+
         if(countErr && countErr.code !== 'PGRST116') return {code:-1, msg:"查询次数失败"};
-        let num = countRow?.count || 0;
+        let num = countRow?.source_count || 0;
         if(num >=5) return {code:-1, msg:"今日添加已达上限5条"};
     }
     const {error} = await supabase.from("vod_source").insert({
@@ -465,17 +507,26 @@ async function addSourceApi(payload){
         from_visitor:!payload.isAdmin,
         sort: sourceList.length
     });
+
     if(!payload.isAdmin && !error){
-        const {data:row} = await supabase.from("visitor_count").select("count").eq("vid", payload.vid).eq("date", today).single();
+        const {data:row} = await supabase.from("visitor_count")
+          .select("source_count")
+          .eq("vid", payload.vid)
+          .eq("add_time", today)
+          .single();
         if(row){
-            await supabase.from("visitor_count").update({count: row.count + 1}).eq("vid", payload.vid).eq("date", today);
+            await supabase.from("visitor_count")
+              .update({source_count: row.source_count + 1})
+              .eq("vid", payload.vid)
+              .eq("add_time", today);
         }else{
-            await supabase.from("visitor_count").insert({vid:payload.vid, date:today, count:1});
+            await supabase.from("visitor_count").insert({vid:payload.vid, add_time:today, source_count:1});
         }
     }
     if(error) return {code:-1, msg:error.message};
     return {code:0};
 }
+
 async function editSourceApi(dbId,payload){
     const {data:old} = await supabase.from("vod_source").select("from_visitor").eq("id",dbId).single();
     const {error} = await supabase.from("vod_source").update({
@@ -488,14 +539,18 @@ async function editSourceApi(dbId,payload){
     if(error) return {code:-1,msg:error.message};
     return {code:0};
 }
+
 async function delSourceApi(dbId){
     const {error} = await supabase.from("vod_source").delete().eq("id",dbId);
     if(error) return {code:-1,msg:error.message};
     return {code:0};
 }
+
 async function checkAdminPwd(inputPwd){
-    const {data} = await supabase.from("admin_config").select("config_value").eq("config_key","admin_pwd").single();
-    return data?.config_value === inputPwd;
+    // admin_config 表：id,pwd,update_at
+    const {data,error} = await supabase.from("admin_config").select("pwd").single();
+    if(error) return false;
+    return data?.pwd === inputPwd;
 }
 
 function renderList(){
@@ -609,7 +664,7 @@ ${item.from_visitor ? '<span class="visitor-tag">(游)</span>' : ''}
             if(ret.code===0){
                 showToast('已删除');
                 await loadSourceData();
-                await loadVisitor();
+                await loadVisitorCount(vid);
             }else{
                 showToast(ret.msg);
             }
@@ -624,14 +679,11 @@ sourceManageBtn.onclick = async ()=>{
     addSourceType.value = currentCat;
     addMask.classList.add('open');
     $('#confirmAdd').disabled = false;
-    const stat = await loadVisitor();
-    if(!isAdmin && stat.remain <= 0){
-        addLimitTip.textContent = "今日剩余添加：0次";
-        $('#confirmAdd').disabled = true;
-        showToast("今日添加次数已经用完！");
-        return;
+    if(!isAdmin){
+        addLimitTip.textContent = `今日剩余添加：5次`;
+    }else{
+        addLimitTip.textContent = "今日剩余添加：无限制";
     }
-    addLimitTip.textContent = isAdmin ? "今日剩余添加：无限制" : `今日剩余添加：${stat.remain}次`;
 }
 $('#cancelAdd').onclick = ()=>addMask.classList.remove('open');
 $('#cancelLogin').onclick = ()=>loginMask.classList.remove('open');
@@ -660,7 +712,7 @@ $('#confirmAdd').onclick = async ()=>{
     addMask.classList.remove('open');
     showToast('添加成功');
     await loadSourceData();
-    await loadVisitor();
+    await loadVisitorCount(vid);
 }
 
 adminLoginBtn.onclick = async ()=>{
@@ -670,7 +722,6 @@ adminLoginBtn.onclick = async ()=>{
         $$('.card-ops').forEach(op=>op.classList.remove('show'));
         showToast('已退出登录');
         await loadSourceData();
-        await loadVisitor();
     }else{
         loginMask.classList.add('open');
         adminPwd.value = "";
@@ -678,6 +729,7 @@ adminLoginBtn.onclick = async ()=>{
         adminPwd.type = 'password';
     }
 }
+
 $('#confirmLogin').onclick = async ()=>{
     const pwd = adminPwd.value.trim();
     const ok = await checkAdminPwd(pwd);
@@ -688,11 +740,11 @@ $('#confirmLogin').onclick = async ()=>{
         renderList();
         showToast('登录成功');
         await loadSourceData();
-        await loadVisitor();
     }else{
         showToast('密码错误');
     }
 }
+
 $('#confirmEdit').onclick = async ()=>{
     const dbId = Number($('#editDbId').value);
     const name = $('#editName').value.trim();
@@ -720,7 +772,7 @@ window.addEventListener('load', async ()=>{
     refreshCatActive();
     if(supabase){
         await loadSourceData();
-        await loadVisitor();
+        await loadVisitorCount(vid);
     }else{
         logText("Supabase未初始化，跳过数据加载");
     }
