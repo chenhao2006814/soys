@@ -4,99 +4,120 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>多源聚合搜索</title>
-<script src="./supabase.js"></script>
-<link rel="stylesheet" href="./style.css?v=1">
+<link rel="stylesheet" href="style.css">
 </head>
 <body>
-<header>
-    <div style="position:absolute; right:0; top:0; z-index:10;">
-        <div id="hamburgerBtn">
-            <span></span>
-            <span></span>
-            <span></span>
-        </div>
-        <div class="category-dropdown" id="catDrop">
-            <div class="category-item" data-type="video">影视源</div>
-            <div class="category-item" data-type="pan">网盘源</div>
-            <div class="category-item" data-type="magnet">磁力源</div>
+<div class="container">
+    <h1 class="title">多源聚合搜索</h1>
+    <div class="search-bar">
+        <input id="kw" type="text" placeholder="输入关键词搜索">
+        <span id="clearKw" class="clear-btn">×</span>
+        <button id="searchBtn">搜索</button>
+    </div>
+    <div class="top-row">
+        <button id="sourceManageBtn">源添加</button>
+        <button id="adminLoginBtn">游客</button>
+        <div class="cat-wrap">
+            <button id="hamburgerBtn">☰</button>
+            <div id="catDrop" class="category-dropdown">
+                <div class="category-item" data-type="video">视频</div>
+                <div class="category-item" data-type="movie">电影</div>
+                <div class="category-item" data-type="anime">动漫</div>
+            </div>
         </div>
     </div>
-    <h1>多源聚合搜索</h1>
-    <div class="tip-text">聚合搜索源 · 一键检索</div>
-</header>
-<div class="search-wrap">
-    <input id="kw" placeholder="输入关键词搜索">
-    <span class="clear-kw" id="clearKw">×</span>
-    <button id="searchBtn">搜索</button>
+    <div id="sourceGrid" class="source-grid"></div>
+    <div class="status-info">
+        <div id="visitorTxt">今日访客：0人</div>
+        <div id="addTotalTxt">游客今日新增源：0</div>
+        <div id="loadTxt">加载中...</div>
+    </div>
 </div>
-<div class="top-bar">
-    <button class="btn" id="sourceManageBtn">源添加</button>
-    <button class="btn" id="adminLoginBtn">游客</button>
-</div>
-<div class="source-grid" id="sourceGrid"></div>
-<div class="mask" id="addMask">
+
+<!-- 添加弹窗 -->
+<div id="addMask" class="mask">
     <div class="modal">
         <h3>添加搜索源</h3>
-        <div class="limit-tip" id="addLimitTip">今日剩余添加：5次</div>
-        <div class="input-row">
-            <input type="text" id="addName" placeholder="源名称（不可重复）">
+        <div class="form-item">
+            <label>源名称</label>
+            <input id="addName" type="text" placeholder="例如：某某影视">
+        </div>
+        <div class="form-item">
+            <label>首页地址</label>
+            <input id="addHome" type="text" placeholder="https://xxx.com">
+        </div>
+        <div class="form-item">
+            <label>搜索地址（{kw}替换关键词）</label>
+            <input id="addSearch" type="text" placeholder="https://xxx.com/search?q={kw}">
+        </div>
+        <div class="form-item">
+            <label>分类</label>
             <select id="addSourceType">
-                <option value="video">影视源</option>
-                <option value="pan">网盘源</option>
-                <option value="magnet">磁力源</option>
+                <option value="video">视频</option>
+                <option value="movie">电影</option>
+                <option value="anime">动漫</option>
             </select>
         </div>
-        <input type="text" id="addHome" placeholder="首页地址（http/https开头）">
-        <input type="text" id="addSearch" placeholder="搜索页地址，关键词使用{kw}替换">
+        <div id="addLimitTip" class="tip-text"></div>
         <div class="btn-group">
-            <button class="btn" id="cancelAdd">取消</button>
-            <button class="btn" id="confirmAdd">确认添加</button>
+            <button id="cancelAdd">取消</button>
+            <button id="confirmAdd">确认添加</button>
         </div>
     </div>
 </div>
-<div class="mask" id="loginMask">
+
+<!-- 管理员登录弹窗 -->
+<div id="loginMask" class="mask">
     <div class="modal">
-        <h3>登录</h3>
-        <div class="pwd-wrap">
-            <input type="password" id="adminPwd" placeholder="输入管理员密码">
-            <span class="pwd-eye" id="pwdEye">👁</span>
+        <h3>管理员登录</h3>
+        <div class="form-item pwd-wrap">
+            <label>密码</label>
+            <input id="adminPwd" type="password" placeholder="输入管理员密码">
+            <span id="pwdEye" class="pwd-eye">👁</span>
         </div>
         <div class="btn-group">
-            <button class="btn" id="cancelLogin">取消</button>
-            <button class="btn" id="confirmLogin">登录</button>
+            <button id="cancelLogin">取消</button>
+            <button id="confirmLogin">登录</button>
         </div>
     </div>
 </div>
-<div class="mask" id="editMask">
+
+<!-- 编辑弹窗 -->
+<div id="editMask" class="mask">
     <div class="modal">
         <h3>编辑搜索源</h3>
-        <div class="input-row">
-            <input type="text" id="editName" placeholder="源名称">
+        <input id="editDbId" type="hidden">
+        <div class="form-item">
+            <label>源名称</label>
+            <input id="editName" type="text">
+        </div>
+        <div class="form-item">
+            <label>首页地址</label>
+            <input id="editHome" type="text">
+        </div>
+        <div class="form-item">
+            <label>搜索地址（{kw}替换关键词）</label>
+            <input id="editSearch" type="text">
+        </div>
+        <div class="form-item">
+            <label>分类</label>
             <select id="editSourceType">
-                <option value="video">影视源</option>
-                <option value="pan">网盘源</option>
-                <option value="magnet">磁力源</option>
+                <option value="video">视频</option>
+                <option value="movie">电影</option>
+                <option value="anime">动漫</option>
             </select>
         </div>
-        <input type="text" id="editHome" placeholder="首页地址">
-        <input type="text" id="editSearch" placeholder="搜索页地址">
-        <input type="hidden" id="editDbId">
         <div class="btn-group">
-            <button class="btn" id="cancelEdit">取消</button>
-            <button class="btn" id="confirmEdit">保存</button>
+            <button id="cancelEdit">取消</button>
+            <button id="confirmEdit">保存</button>
         </div>
     </div>
 </div>
-<div class="toast" id="toast"></div>
-<footer>
-    <span id="visitorTxt">今日访客：0人</span>
-    &nbsp;|&nbsp;
-    <span id="addTotalTxt">游客今日新增源：0</span>
-    &nbsp;|&nbsp;
-    <span id="loadTxt">页面加载：0.00s</span>
-</footer>
-<div id="debugBox">【调试日志启动】\n</div>
 
-<script src="./main.js"></script>
+<div id="toast" class="toast"></div>
+<div id="debugBox" class="debug-box"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="main.js"></script>
 </body>
 </html>

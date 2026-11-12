@@ -10,32 +10,31 @@ function logText(msg) {
 }
 
 window.onerror = function (message) {
-    logText("JS:" + message);
+    logText("❌全局JS异常:" + message);
 };
 
-logText("Supabase SDK");
+logText("等待Supabase SDK加载");
 try {
     if (typeof window.supabase !== "undefined") {
-        logText(" Supabase SDK");
+        logText("✅ Supabase SDK加载完毕");
         supabase = window.supabase.createClient(supabaseUrl, supabaseAnonKey);
     } else {
-        logText(" Supabase SDKCDN");
+        logText("❌ Supabase SDK未加载，检查supabase.js");
+    } catch (err) {
+        logText("❌初始化失败:" + err.message);
     }
-} catch (err) {
-    logText(":" + err.message);
 }
 
-// Cookie
+// Cookie工具
 function setCookie(name, value, day) {
-    let d = new Date();
+    const d = new Date();
     d.setTime(d.getTime() + day * 24 * 60 * 60 * 1000);
-    document.cookie = name + "=" + value + ";expires=" + d.toUTCString() + ";path=/";
+    document.cookie = `${name}=${value};expires=${d.toUTCString()};path=/`;
 }
 
 function getCookie(name) {
-    let arr = document.cookie.match(new RegExp("(^| )" + name + "=([^;]*)(;|$)"));
-    if (arr != null) return arr[2];
-    return null;
+    const arr = document.cookie.match(new RegExp("(^| )" + name + "=([^;]*)(;|$)"));
+    return arr ? arr[2] : null;
 }
 
 let vid = getCookie('vid');
@@ -44,14 +43,12 @@ if (!vid) {
     setCookie('vid', vid, 1);
 }
 
-const todayStr = new Date().toISOString().slice(0, 10);
 const $ = s => document.querySelector(s);
 const $$ = s => document.querySelectorAll(s);
 const pageStart = performance.now();
 
 let sourceList = [];
 let isAdmin = false;
-let remainCount = 5;
 let currentCat = "video";
 let dragState = { active: false, fromIdx: null, ghostEl: null, startX: 0, startY: 0 };
 
@@ -75,6 +72,7 @@ const addSourceType = $('#addSourceType');
 const editSourceType = $('#editSourceType');
 const adminPwd = $('#adminPwd');
 const pwdEye = $('#pwdEye');
+const searchBtn = $('#searchBtn');
 
 function showToast(txt) {
     toast.textContent = txt;
@@ -86,18 +84,28 @@ function getDomain(url) {
     try {
         const u = new URL(url);
         return u.hostname.replace('www.', '');
-    } catch (e) { return ''; }
+    } catch { return ''; }
 }
 
-function doCardJump(item) {
-    const kw = kwInput.value.trim();
+function doCardJump(item, keyword = "") {
+    const kw = keyword || kwInput.value.trim();
     if (kw) {
         const link = item.search.replaceAll('{kw}', encodeURIComponent(kw));
         window.open(link, '_blank');
     } else {
-        window.open(item.home, '_blank');
+        window.open(item.url, '_blank');
     }
 }
+
+searchBtn.onclick = () => {
+    const kw = kwInput.value.trim();
+    if (!kw) {
+        showToast("请输入搜索关键词");
+        return;
+    }
+    const filtered = sourceList.filter(i => (i.category || "video") === currentCat);
+    filtered.forEach(item => doCardJump(item, kw));
+};
 
 function refreshCatActive() {
     $$('.category-item').forEach(el => {
@@ -105,15 +113,14 @@ function refreshCatActive() {
     })
 }
 
-hamburgerBtn.addEventListener('click', (e) => {
+hamburgerBtn.addEventListener('click', e => {
     e.stopPropagation();
     catDropdown.classList.toggle('open');
 });
-document.addEventListener('click', (e) => {
-    if (!catDropdown.contains(e.target)) catDropdown.classList.remove('open');
-});
+document.addEventListener('click', () => catDropdown.classList.remove('open'));
+
 $$('.category-item').forEach(item => {
-    item.addEventListener('click', (e) => {
+    item.addEventListener('click', e => {
         e.stopPropagation();
         currentCat = item.dataset.type;
         refreshCatActive();
@@ -133,10 +140,9 @@ clearKw.onclick = () => {
 
 pwdEye.onclick = () => {
     adminPwd.type = adminPwd.type === 'password' ? 'text' : 'password';
-    pwdEye.textContent = adminPwd.type === 'password' ? '' : '';
+    pwdEye.textContent = adminPwd.type === 'password' ? '👁' : '🙈';
 }
 
-// 
 async function loadSourceData() {
     let retry = 0;
     const maxRetry = 2;
@@ -148,86 +154,67 @@ async function loadSourceData() {
                 .order('sort', { ascending: true });
             if (error) throw error;
             sourceList = data || [];
-            renderList(sourceList);
-            logText(`${data.length}`);
+            renderList();
+            logText(`加载完成，共${data.length}条源`);
             return;
         } catch (e) {
             retry++;
-            logText(`${retry}/${maxRetry}: ${e.message}`);
-            if (retry > maxRetry) {
-                logText(": " + e);
-            }
+            logText(`读取源失败，重试${retry}/${maxRetry}: ${e.message}`);
+            if (retry > maxRetry) logText("读取源彻底失败:" + e);
             await new Promise(resolve => setTimeout(resolve, 300));
         }
     }
 }
 
 async function saveSortAfterChange() {
-    logText("");
+    logText("拖拽保存排序");
     for (let i = 0; i < sourceList.length; i++) {
         const item = sourceList[i];
         const { error } = await supabase.from('vod_source').update({ sort: i }).eq("id", item.id);
-        if (error) logText("" + error.message);
+        if (error) logText("排序保存失败:" + error.message);
     }
-    showToast("");
+    showToast("排序已保存");
 }
 
-// 
-async function loadVisitorCount(vid) {
+async function loadVisitorCount(vidVal) {
     const today = new Date().toISOString().slice(0, 10);
-    logText(`visitor_id=${vid}add_date=${today}`);
+    logText(`查询访客计数 vid=${vidVal}, date=${today}`);
     try {
         const { data, error } = await supabase
             .from('visitor_count')
             .select('*')
-            .eq('visitor_id', vid)
+            .eq('visitor_id', vidVal)
             .eq('add_date', today)
             .limit(1);
         if (error) {
-            logText("" + error.message);
+            logText("访客查询异常:" + error.message);
             return;
         }
-        logText("" + JSON.stringify(data));
         if (!data || data.length === 0) {
-            logText("");
-            const insertRes = await supabase.from('visitor_count').insert([
-                {
-                    visitor_id: vid,
-                    add_date: today,
-                    add_num: 0
-                }
-            ]);
-            if (insertRes.error) {
-                logText("" + insertRes.error.message);
-            } else {
-                logText(" ");
-            }
-            document.getElementById('visitorTxt').innerText = `1`;
-            document.getElementById('addTotalTxt').innerText = `0`;
+            await supabase.from('visitor_count').insert([{ visitor_id: vidVal, add_date: today, add_num: 0 }]);
+            visitorTxt.innerText = `今日访客：1人`;
+            addTotalTxt.innerText = `游客今日新增源：0`;
         } else {
-            const row = data[0];
-            logText(" " + row.add_num);
-            document.getElementById('visitorTxt').innerText = `1`;
-            document.getElementById('addTotalTxt').innerText = `${row.add_num}`;
+            visitorTxt.innerText = `今日访客：1人`;
+            addTotalTxt.innerText = `游客今日新增源：${data[0].add_num}`;
         }
     } catch (err) {
-        logText("" + err.message);
+        logText("访客统计异常:" + err.message);
     }
 }
 
 async function addSourceApi(payload) {
-    logText(`addSourceApihome="${payload.home}" search="${payload.search}" name="${payload.name}"`);
     const today = new Date().toISOString().slice(0, 10);
     if (!payload.isAdmin) {
-        const { data: countRow, error: countErr } = await supabase
+        const { data: row, error: errCnt } = await supabase
             .from("visitor_count")
             .select("add_num")
             .eq("visitor_id", payload.vid)
             .eq("add_date", today)
             .single();
-        if (countErr && countErr.code !== 'PGRST116') return { code: -1, msg: "" };
-        let num = countRow?.add_num || 0;
-        if (num >= 5) return { code: -1, msg: "5" };
+        if (errCnt && errCnt.code !== 'PGRST116') return { code: -1, msg: "获取次数失败" };
+        const num = row?.add_num || 0;
+        if (num >= 5) return { code: -1, msg: "今日添加已达上限5次" };
     }
     const { error } = await supabase.from('vod_source').insert({
         name: payload.name,
@@ -244,33 +231,32 @@ async function addSourceApi(payload) {
             .eq("add_date", today)
             .single();
         if (row) {
-            await supabase.from("visitor_count")
-                .update({ add_num: row.add_num + 1 })
-                .eq("visitor_id", payload.vid)
-                .eq("add_date", today);
+            await supabase.from("visitor_count").update({ add_num: row.add_num + 1 })
+                .eq("visitor_id", payload.vid).eq("add_date", today);
         } else {
             await supabase.from("visitor_count").insert({ visitor_id: payload.vid, add_date: today, add_num: 1 });
         }
     }
     if (error) {
-        logText(`${error.message}`);
+        logText(`新增源异常:${error.message}`);
         return { code: -1, msg: error.message };
     }
-    logText(" addSourceApi");
+    logText("新增源成功");
     return { code: 0 };
 }
 
 async function editSourceApi(dbId, payload) {
-    const { data: old } = await supabase.from('vod_source').select("from_visitor").eq("id", dbId).single();
+    const { data: oldItem } = await supabase.from('vod_source')
+        .select("from_visitor").eq("id", dbId).single();
     const { error } = await supabase.from('vod_source').update({
         name: payload.name,
         url: payload.home,
         search: payload.search,
         category: payload.type,
-        from_visitor: old.from_visitor
+        from_visitor: oldItem.from_visitor
     }).eq("id", dbId);
     if (error) {
-        logText(`${error.message}`);
+        logText(`编辑异常:${error.message}`);
         return { code: -1, msg: error.message };
     }
     return { code: 0 };
@@ -279,20 +265,19 @@ async function editSourceApi(dbId, payload) {
 async function delSourceApi(dbId) {
     const { error } = await supabase.from('vod_source').delete().eq("id", dbId);
     if (error) {
-        logText(`${error.message}`);
+        logText(`删除异常:${error.message}`);
         return { code: -1, msg: error.message };
     }
     return { code: 0 };
 }
 
 async function checkAdminPwd(inputPwd) {
-    const { data, error } = await supabase.from("admin_config").select("pwd").single();
-    if (error) return false;
+    const { data } = await supabase.from("admin_config").select("pwd").single();
     return data?.pwd === inputPwd;
 }
 
 function renderList() {
-    logText("renderList");
+    logText("执行renderList渲染卡片");
     sourceGrid.innerHTML = '';
     const filtered = sourceList.filter(item => (item.category || "video") === currentCat);
     filtered.forEach((item) => {
@@ -301,16 +286,8 @@ function renderList() {
         card.className = 'source-card';
         card.dataset.idx = realIdx;
         card.dataset.dbid = item.id;
-        card.innerHTML = `
-  <div class="card-name">
-    ${item.name}
-    ${item.from_visitor === true ? '<span class="visitor-tag">()</span>' : ''}
-  </div>
-  <div class="card-ops">
-    <button class="opt-btn edit" data-idx="${realIdx}" data-dbid="${item.id}"></button>
-    <button class="opt-btn del" data-idx="${realIdx}" data-dbid="${item.id}"></button>
-  </div>
-`;
+        card.innerHTML = `<div class="card-name">${item.name}${item.from_visitor === true ? '<span class="visitor-tag">(游)</span>' : ''}</div><div class="card-ops"><button class="opt-btn edit" data-idx="${realIdx}" data-dbid="${item.id}">编辑</button><button class="opt-btn del" data-idx="${realIdx}" data-dbid="${item.id}">删除</button></div>`;
+
         const editBtn = card.querySelector('.edit');
         const delBtn = card.querySelector('.del');
         const opsWrap = card.querySelector('.card-ops');
@@ -337,10 +314,10 @@ function renderList() {
                 ghost.style.top = touch.clientY + 'px';
                 card.classList.add('dragging');
                 bodyEl.classList.add('drag-lock');
-                showToast("");
+                showToast("已激活拖拽，拖动换位");
             }, 600);
-        })
-        card.addEventListener('contextmenu', e => { if (isAdmin) e.preventDefault(); })
+        });
+        card.addEventListener('contextmenu', e => { if (isAdmin) e.preventDefault(); });
         card.addEventListener('touchmove', (e) => {
             if (!isAdmin) return;
             const touch = e.touches[0];
@@ -366,7 +343,7 @@ function renderList() {
                     break;
                 }
             }
-        })
+        });
         card.addEventListener('touchend', () => {
             clearTimeout(longPressTimer);
             if (!dragState.active) return;
@@ -375,17 +352,17 @@ function renderList() {
             card.classList.remove('dragging');
             bodyEl.classList.remove('drag-lock');
             saveSortAfterChange();
-        })
+        });
         card.addEventListener('click', (e) => {
             e.stopPropagation();
             if (isAdmin) {
-                $$('.card-ops').forEach(o => o.classList.remove('show'));
+                $$('.card-ops').forEach(op => op.classList.remove('show'));
                 opsWrap.classList.add('show');
             } else {
                 doCardJump(item);
             }
-        })
-        card.addEventListener('dblclick', () => { doCardJump(item); })
+        });
+        card.addEventListener('dblclick', () => doCardJump(item));
 
         editBtn.addEventListener('click', (e) => {
             e.stopPropagation();
@@ -397,35 +374,31 @@ function renderList() {
             $('#editSearch').value = data.search;
             editSourceType.value = data.category || "video";
             editMask.classList.add('open');
-        })
+        });
         delBtn.addEventListener('click', async (e) => {
             e.stopPropagation();
             const dbId = Number(delBtn.dataset.dbid);
-            if (!confirm("")) return;
+            if (!confirm("确定删除该搜索源吗？")) return;
             const ret = await delSourceApi(dbId);
             if (ret.code === 0) {
-                showToast('');
+                showToast('已删除');
                 await loadSourceData();
                 await loadVisitorCount(vid);
             } else {
                 showToast(ret.msg);
             }
-        })
+        });
         sourceGrid.appendChild(card);
     })
 }
 
 sourceManageBtn.onclick = async () => {
-    addLimitTip.textContent = "...";
+    addLimitTip.textContent = "正在获取剩余次数...";
     $('#addName').value = ""; $('#addHome').value = ""; $('#addSearch').value = "";
     addSourceType.value = currentCat;
     addMask.classList.add('open');
     $('#confirmAdd').disabled = false;
-    if (!isAdmin) {
-        addLimitTip.textContent = `5`;
-    } else {
-        addLimitTip.textContent = "";
-    }
+    addLimitTip.textContent = isAdmin ? "今日剩余添加：无限制" : "今日剩余添加：5次";
 }
 $('#cancelAdd').onclick = () => addMask.classList.remove('open');
 $('#cancelLogin').onclick = () => loginMask.classList.remove('open');
@@ -436,26 +409,23 @@ $('#confirmAdd').onclick = async () => {
     const home = $('#addHome').value.trim();
     const search = $('#addSearch').value.trim();
     const typeVal = addSourceType.value;
-
-    logText(`name="${name}" home="${home}" search="${search}" type="${typeVal}"`);
-
-    if (!name || !home || !search) return showToast('');
-    if (!(home.startsWith('http://') || home.startsWith('https://'))) return showToast('');
-    if (!(search.startsWith('http://') || search.startsWith('https://'))) return showToast('');
-    if (sourceList.some(x => x.name === name)) return showToast('');
+    if (!name || !home || !search) return showToast('所有内容不能为空');
+    if (!/^https?:\/\//.test(home)) return showToast('首页地址必须http/https开头');
+    if (!/^https?:\/\//.test(search)) return showToast('搜索地址必须http/https开头');
+    if (sourceList.some(x => x.name === name)) return showToast('源名称不能重复');
     const dHome = getDomain(home);
     const dSearch = getDomain(search);
     const domainRepeat = sourceList.some(x => {
         const dh = getDomain(x.url);
         const ds = getDomain(x.search);
         return dh === dHome || dh === dSearch || ds === dHome || ds === dSearch;
-    })
-    if (domainRepeat) return showToast('');
-    const payload = { name, home, search, type: typeVal, vid: vid, isAdmin: isAdmin };
+    });
+    if (domainRepeat) return showToast("该域名已经存在，不能重复添加");
+    const payload = { name, home, search, type: typeVal, vid, isAdmin };
     const ret = await addSourceApi(payload);
     if (ret.code !== 0) return showToast(ret.msg);
     addMask.classList.remove('open');
-    showToast('');
+    showToast("添加成功");
     await loadSourceData();
     await loadVisitorCount(vid);
 }
@@ -463,14 +433,14 @@ $('#confirmAdd').onclick = async () => {
 adminLoginBtn.onclick = async () => {
     if (isAdmin) {
         isAdmin = false;
-        adminLoginBtn.textContent = '';
+        adminLoginBtn.textContent = '游客';
         $$('.card-ops').forEach(op => op.classList.remove('show'));
-        showToast('');
+        showToast("已退出管理员");
         await loadSourceData();
     } else {
         loginMask.classList.add('open');
         adminPwd.value = "";
-        pwdEye.textContent = '';
+        pwdEye.textContent = '👁';
         adminPwd.type = 'password';
     }
 }
@@ -480,13 +450,13 @@ $('#confirmLogin').onclick = async () => {
     const ok = await checkAdminPwd(pwd);
     if (ok) {
         isAdmin = true;
-        adminLoginBtn.textContent = '';
+        adminLoginBtn.textContent = '管理员';
         loginMask.classList.remove('open');
         renderList();
-        showToast('');
+        showToast("管理员登录成功");
         await loadSourceData();
     } else {
-        showToast('');
+        showToast("密码错误");
     }
 }
 
@@ -496,14 +466,14 @@ $('#confirmEdit').onclick = async () => {
     const home = $('#editHome').value.trim();
     const search = $('#editSearch').value.trim();
     const typeVal = editSourceType.value;
-    if (!name || !home || !search) return showToast('');
-    if (!(home.startsWith('http://') || home.startsWith('https://'))) return showToast('');
-    if (!(search.startsWith('http://') || search.startsWith('https://'))) return showToast('');
+    if (!name || !home || !search) return showToast("内容不能为空");
+    if (!/^https?:\/\//.test(home)) return showToast("首页地址http/https开头");
+    if (!/^https?:\/\//.test(search)) return showToast("搜索地址http/https开头");
     const payload = { name, home, search, type: typeVal };
     const ret = await editSourceApi(dbId, payload);
     if (ret.code === 0) {
         editMask.classList.remove('open');
-        showToast('');
+        showToast("保存成功");
         await loadSourceData();
     } else {
         showToast(ret.msg);
@@ -511,14 +481,14 @@ $('#confirmEdit').onclick = async () => {
 }
 
 window.addEventListener('load', async () => {
-    logText("load");
+    logText("页面load事件触发");
     const cost = ((performance.now() - pageStart) / 1000).toFixed(2);
-    loadTxt.textContent = `${cost}s`;
+    loadTxt.textContent = `页面加载：${cost}s`;
     refreshCatActive();
     if (supabase) {
         await loadSourceData();
         await loadVisitorCount(vid);
     } else {
-        logText("Supabase");
+        logText("Supabase实例不存在，跳过数据加载");
     }
 });
