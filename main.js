@@ -277,16 +277,17 @@ function renderList(){
         card.className = 'source-card';
         card.dataset.idx = realIdx;
         card.dataset.dbid = item.id;
-    card.innerHTML = `
+   card.innerHTML = `
   <div class="card-name">
     ${item.name}
     ${item.from_visitor === true ? '<span class="visitor-tag">()</span>' : ''}
   </div>
   <div class="card-ops">
-    <button class="opt-btn edit" data-idx="${realldx}"></button>
-    <button class="opt-btn del" data-idx="${realldx}"></button>
+    <button class="opt-btn edit" data-idx="${realIdx}"></button>
+    <button class="opt-btn del" data-idx="${realIdx}"></button>
   </div>
 `;
+
 
         const editBtn = card.querySelector('.edit');
         const delBtn = card.querySelector('.del');
