@@ -293,7 +293,6 @@ footer{margin-top:36px;padding-top:16px;border-top:1px solid #e5e6eb;text-align:
 const supabaseUrl = "https://lzaidqtldgxhauwssslz.supabase.co";
 const supabaseKey = "sb_publishable_323LjUfcN75yOBZzS7mJVg_ejjFic3t";
 const supabase = window.supabase.createClient(supabaseUrl, supabaseKey);
-
 function setCookie(name,value,day){
     let d = new Date();
     d.setTime(d.getTime() + day*24*60*60*1000);
@@ -309,11 +308,9 @@ if (!vid) {
     vid = 'v_' + Date.now() + '_' + Math.random().toString(36).slice(2);
     setCookie('vid', vid, 1);
 }
-
 const $ = s => document.querySelector(s);
 const $$ = s => document.querySelectorAll(s);
 const pageStart = performance.now();
-
 let sourceList = [];
 let isAdmin = false;
 let remainCount = 5;
@@ -324,7 +321,6 @@ let dragState = {
     ghostEl: null,
     startX:0, startY:0
 };
-
 const kwInput = $('#kw');
 const clearKw = $('#clearKw');
 const sourceGrid = $('#sourceGrid');
@@ -346,7 +342,6 @@ const addSourceType = $('#addSourceType');
 const editSourceType = $('#editSourceType');
 const adminPwd = $('#adminPwd');
 const pwdEye = $('#pwdEye');
-
 hamburgerBtn.addEventListener('click', (e) => {
   e.stopPropagation();
   catDropdown.classList.toggle('open');
@@ -365,7 +360,6 @@ $$('.category-item').forEach(item => {
     catDropdown.classList.remove('open');
   });
 });
-
 kwInput.addEventListener('input', ()=>{
   clearKw.classList.toggle('show', kwInput.value.trim() !== '');
 });
@@ -374,7 +368,6 @@ clearKw.onclick = ()=>{
   clearKw.classList.remove('show');
   kwInput.focus();
 };
-
 pwdEye.onclick = ()=>{
     if(adminPwd.type === 'password'){
         adminPwd.type = 'text';
@@ -384,7 +377,6 @@ pwdEye.onclick = ()=>{
         pwdEye.textContent = '👁';
     }
 };
-
 function logText(msg){
     const t = new Date().toLocaleTimeString();
     debugBox.innerText += `[${t}] ${msg}\n`;
@@ -415,7 +407,6 @@ function refreshCatActive(){
         el.classList.toggle('active', el.dataset.type === currentCat);
     })
 }
-
 async function saveSortAfterChange(){
     logText("开始批量更新sort字段");
     for(let i=0;i<sourceList.length;i++){
@@ -427,7 +418,6 @@ async function saveSortAfterChange(){
     }
     logText("拖拽排序保存完成");
 }
-
 function renderList(){
     logText("执行renderList渲染卡片");
     sourceGrid.innerHTML = '';
@@ -451,7 +441,6 @@ ${item.from_visitor ? '<span class="visitor-tag">(游)</span>' : ''}
         const opsWrap = card.querySelector('.card-ops');
         let longPressTimer = null;
         let touchStartX = 0, touchStartY = 0;
-
         card.addEventListener('touchstart',(e)=>{
             if(!isAdmin) return;
             const touch = e.touches[0];
@@ -526,7 +515,6 @@ ${item.from_visitor ? '<span class="visitor-tag">(游)</span>' : ''}
             }
         })
         card.addEventListener('dblclick',()=> doCardJump(item));
-
         editBtn.addEventListener('click',(e)=>{
             e.stopPropagation();
             const i = Number(editBtn.dataset.idx);
@@ -555,7 +543,6 @@ ${item.from_visitor ? '<span class="visitor-tag">(游)</span>' : ''}
         sourceGrid.appendChild(card);
     })
 }
-
 async function loadVisitor(){
     const today = new Date().toISOString().slice(0,10);
     const {data:vData, error:vErr} = await supabase
@@ -578,7 +565,6 @@ async function loadVisitor(){
     visitorTxt.textContent = `今日访客：1人`;
     addTotalTxt.textContent = `游客今日新增源：${addNum}`;
 }
-
 sourceManageBtn.onclick = async ()=>{
     addLimitTip.textContent = "正在获取剩余次数...";
     $('#addName').value = "";
@@ -599,60 +585,65 @@ sourceManageBtn.onclick = async ()=>{
 $('#cancelAdd').onclick = ()=>addMask.classList.remove('open');
 $('#cancelLogin').onclick = ()=>loginMask.classList.remove('open');
 $('#cancelEdit').onclick = ()=>editMask.classList.remove('open');
-
 $('#confirmAdd').onclick = async ()=>{
-    const name = $('#addName').value.trim();
-    const home = $('#addHome').value.trim();
-    const search = $('#addSearch').value.trim();
-    const typeVal = addSourceType.value;
-    if(!name || !home || !search) return showToast('内容不能为空');
-    if(!(home.startsWith('http://') || home.startsWith('https://'))) return showToast('首页地址不是合法网址');
-    if(!(search.startsWith('http://') || search.startsWith('https://'))) return showToast('搜索页地址不是合法网址');
+    try{
+        const name = $('#addName').value.trim();
+        const home = $('#addHome').value.trim();
+        const search = $('#addSearch').value.trim();
+        const typeVal = addSourceType.value;
+        if(!name || !home || !search) return showToast('内容不能为空');
+        if(!(home.startsWith('http://') || home.startsWith('https://'))) return showToast('首页地址不是合法网址');
+        if(!(search.startsWith('http://') || search.startsWith('https://'))) return showToast('搜索页地址不是合法网址');
 
-    const {data:existName} = await supabase.from('vod_source').select('id').eq('name',name);
-    if(existName && existName.length>0) return showToast('源名称已存在');
+        const {data:existName} = await supabase.from('vod_source').select('id').eq('name',name);
+        if(existName && existName.length>0) return showToast('源名称已存在');
 
-    const dHome = getDomain(home);
-    const dSearch = getDomain(search);
-    const {data:allList} = await supabase.from('vod_source').select('home,search');
-    const domainRepeat = allList?.some(x=>{
-        const dh = getDomain(x.home);
-        const ds = getDomain(x.search);
-        return dh === dHome || dh === dSearch || ds === dHome || ds === dSearch;
-    })
-    if(domainRepeat) return showToast('该域名已存在，不可重复添加');
+        const dHome = getDomain(home);
+        const dSearch = getDomain(search);
+        const {data:allList} = await supabase.from('vod_source').select('home,search');
+        const domainRepeat = allList?.some(x=>{
+            const dh = getDomain(x.home);
+            const ds = getDomain(x.search);
+            return dh === dHome || dh === dSearch || ds === dHome || ds === dSearch;
+        }) ?? false;
+        if(domainRepeat) return showToast('该域名已存在，不可重复添加');
 
-    const {data:maxSort} = await supabase.from('vod_source').select('sort').order('sort',{ascending:false}).limit(1);
-    const newSort = (maxSort?.length>0 ? (maxSort[0].sort+1) : 0);
-    const insertRow = {
-        name,
-        home,
-        search,
-        category:typeVal,
-        sort:newSort,
-        from_visitor: !isAdmin
-    };
-    const {error:insErr} = await supabase.from('vod_source').insert([insertRow]);
-    if(insErr){
-        logText("新增源失败 "+JSON.stringify(insErr));
-        showToast("添加失败");
-        return;
-    }
-    if(!isAdmin){
-        const today = new Date().toISOString().slice(0,10);
-        const {data:rec} = await supabase.from('visitor_count').select("*").eq('visitor_id',vid).eq('add_date',today);
-        if(rec && rec.length>0){
-            await supabase.from('visitor_count').update({add_num:rec[0].add_num+1}).eq('id',rec[0].id);
-        }else{
-            await supabase.from('visitor_count').insert([{visitor_id:vid,add_date:today,add_num:1}]);
+        const {data:maxSort} = await supabase.from('vod_source').select('sort').order('sort',{ascending:false}).limit(1);
+        const newSort = (maxSort?.length>0 ? (maxSort[0].sort+1) : 0);
+
+        const insertRow = {
+            name,
+            home,
+            search,
+            category:typeVal,
+            sort:newSort,
+            from_visitor: !isAdmin
+        };
+        const {error:insErr} = await supabase.from('vod_source').insert([insertRow]);
+        if(insErr){
+            logText("新增源失败 "+JSON.stringify(insErr));
+            showToast("添加失败："+insErr.message);
+            return;
         }
-    }
-    addMask.classList.remove('open');
-    showToast('添加成功');
-    await loadSourceData();
-    await loadVisitor();
-}
 
+        if(!isAdmin){
+            const today = new Date().toISOString().slice(0,10);
+            const {data:rec} = await supabase.from('visitor_count').select("*").eq('visitor_id',vid).eq('add_date',today);
+            if(rec?.length>0){
+                await supabase.from('visitor_count').update({add_num:rec[0].add_num+1}).eq('id',rec[0].id);
+            }else{
+                await supabase.from('visitor_count').insert([{visitor_id:vid,add_date:today,add_num:1}]);
+            }
+        }
+        addMask.classList.remove('open');
+        showToast('添加成功');
+        await loadSourceData();
+        await loadVisitor();
+    }catch(err){
+        logText("添加捕获异常："+String(err));
+        showToast("请求异常："+err.message);
+    }
+}
 adminLoginBtn.onclick = async ()=>{
     if(isAdmin){
         isAdmin = false;
@@ -668,7 +659,6 @@ adminLoginBtn.onclick = async ()=>{
         adminPwd.type = 'password';
     }
 }
-
 $('#confirmLogin').onclick = async ()=>{
     const pwd = adminPwd.value.trim();
     const {data:cfg} = await supabase.from('admin_config')
@@ -677,7 +667,6 @@ $('#confirmLogin').onclick = async ()=>{
   .limit(1);
 let realPwd = "";
 if(cfg && cfg.length>0) realPwd = cfg[0].config_value;
-
     if(pwd === realPwd){
         isAdmin = true;
         adminLoginBtn.textContent = '管理员';
@@ -690,7 +679,6 @@ if(cfg && cfg.length>0) realPwd = cfg[0].config_value;
         showToast('密码错误');
     }
 }
-
 $('#confirmEdit').onclick = async ()=>{
     const rowId = $('#editId').value;
     const name = $('#editName').value.trim();
@@ -700,7 +688,6 @@ $('#confirmEdit').onclick = async ()=>{
     if(!name || !home || !search) return showToast('内容不能为空');
     if(!(home.startsWith('http://') || home.startsWith('https://'))) return showToast('首页地址非法');
     if(!(search.startsWith('http://') || search.startsWith('https://'))) return showToast('搜索页地址非法');
-
     const updatePayload = {name,home,search,category:typeVal};
     const {error} = await supabase.from('vod_source').update(updatePayload).eq('id',rowId);
     if(error){
@@ -712,7 +699,6 @@ $('#confirmEdit').onclick = async ()=>{
     showToast('保存成功');
     await loadSourceData();
 }
-
 async function loadSourceData(){
     logText("请求读取vod_source");
     const {data,error} = await supabase
@@ -727,7 +713,6 @@ async function loadSourceData(){
     }
     renderList();
 }
-
 window.addEventListener('load', async ()=>{
     const cost = ((performance.now() - pageStart)/1000).toFixed(2);
     loadTxt.textContent = `页面加载：${cost}s`;
