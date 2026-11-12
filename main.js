@@ -196,6 +196,7 @@ async function loadVisitorCount(vid) {
   }
 }
 async function addSourceApi(payload){
+	logText(`【addSourceApi入参】home="${payload.home}" search="${payload.search}" name="${payload.name}"`);
     const today = new Date().toISOString().slice(0,10);
     if(!payload.isAdmin){
         const {data:countRow, error:countErr} = await supabase
